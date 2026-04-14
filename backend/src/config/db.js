@@ -1,14 +1,12 @@
 const mongoose = require("mongoose");
+const env = require("./env");
 
 const connectDB = async () => {
     try {
-        const conn = await mongoose.connect(process.env.MONGO_URI, {
-            dbName: "neuroplay",
-        });
-
-        console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+        await mongoose.connect(env.mongoUri);
+        console.log("✅ MongoDB Connected");
     } catch (error) {
-        console.error("❌ MongoDB connection error:", error.message);
+        console.error("❌ MongoDB Error:", error);
         process.exit(1);
     }
 };
