@@ -22,11 +22,18 @@ dist/
 build/
 out/
 
-# Logs
+# Assets & Logs
+uploads/
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pip-log.txt
+
+# Testing
+.coverage
+htmlcov/
 
 # Databases (Local data)
 data/
