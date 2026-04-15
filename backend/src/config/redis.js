@@ -1,16 +1,19 @@
-const { createClient } = require("redis");
-const env = require("./env");
+const IORedis = require("ioredis");
 
-const client = createClient({
-    url: env.redisUrl,
+const connection = new IORedis({
+    host: process.env.REDIS_HOST || "127.0.0.1",
+    port: process.env.REDIS_PORT || 6379,
+
+    // 🔥 CRITICAL FOR BULLMQ
+    maxRetriesPerRequest: null,
 });
 
-client.on("error", (err) => {
+connection.on("connect", () => {
+    console.log("✅ Redis Connected");
+});
+
+connection.on("error", (err) => {
     console.error("❌ Redis Error:", err);
 });
 
-client.connect();
-
-console.log("✅ Redis Connected");
-
-module.exports = client;
+module.exports = connection;

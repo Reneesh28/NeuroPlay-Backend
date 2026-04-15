@@ -1,12 +1,13 @@
 const aiService = require("../../../integrations/ai.service");
 const { formatStepOutput, formatErrorOutput } = require("../../pipeline/output.formatter");
 
-async function featureProcessor(job) {
-    const step = "feature_extraction";
+async function ingestionProcessor(job) {
+    const step = "video_processing";
 
     try {
         const start = Date.now();
 
+        // 🔥 Call AI service
         const response = await aiService.execute({
             job_id: job._id,
             step,
@@ -29,4 +30,4 @@ async function featureProcessor(job) {
     }
 }
 
-module.exports = featureProcessor;
+module.exports = ingestionProcessor;

@@ -1,14 +1,32 @@
 const aiService = require("../../../integrations/ai.service");
+const { formatStepOutput, formatErrorOutput } = require("../../pipeline/output.formatter");
 
-module.exports = async (job, step, inputData) => {
-    console.log("📊 Embedding Generation step");
-    console.log("📥 Input Data:", inputData);
+async function embeddingProcessor(job) {
+    const step = "embedding_generation";
 
-    const result = await aiService.executeStep({
-        jobId: job.data.jobId,
-        step: step.name,
-        inputData,
-    });
+    try {
+        const start = Date.now();
 
-    return result;
-};
+        const response = await aiService.execute({
+            job_id: job._id,
+            step,
+            input: job.input_ref,
+        });
+
+        const executionTime = Date.now() - start;
+
+        return formatStepOutput({
+            step,
+            rawOutput: response,
+            executionTime,
+        });
+
+    } catch (error) {
+        return formatErrorOutput({
+            step,
+            error,
+        });
+    }
+}
+
+module.exports = embeddingProcessor;
