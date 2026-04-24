@@ -2,24 +2,24 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def run(input_data: dict, context: dict, execution_mode: str) -> dict:
-    """
-    Standardized Simulation Processor.
-    """
-    domain = context.get("domain", "unknown")
+def run(input_data: dict, context: dict, target_mode: str) -> tuple:
+    """Standardized Simulation Processor with Internal Fallback."""
     trace_id = context.get("trace_id", "unknown")
+    current_mode = target_mode
     
-    logger.info(f"[Trace: {trace_id}] Running simulation for domain {domain} in {execution_mode} mode")
-    
-    if execution_mode == "FULL":
-        result = "high_fidelity_simulation_complete"
-    elif execution_mode == "PARTIAL":
-        result = "low_fidelity_simulation_complete"
-    else:
-        result = "heuristic_simulation_complete"
-        
-    return {
-        "result": result,
-        "execution_mode": execution_mode,
-        "domain": domain
-    }
+    if current_mode == "FULL":
+        try:
+            logger.info(f"[Trace: {trace_id}] SimulationProcessor: Executing FULL mode")
+            return {"result": "high_fidelity_simulation_complete"}, "FULL"
+        except Exception:
+            current_mode = "PARTIAL"
+
+    if current_mode == "PARTIAL":
+        try:
+            logger.info(f"[Trace: {trace_id}] SimulationProcessor: Executing PARTIAL mode")
+            return {"result": "low_fidelity_simulation_complete", "partial": True}, "PARTIAL"
+        except Exception:
+            current_mode = "FALLBACK"
+
+    logger.info(f"[Trace: {trace_id}] SimulationProcessor: Executing FALLBACK mode")
+    return {"result": "heuristic_simulation_complete", "fallback": True}, "FALLBACK"

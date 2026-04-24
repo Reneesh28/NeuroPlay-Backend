@@ -49,6 +49,7 @@ def build_error_response(
     """
     return ExecuteResponse(
         status="failed",
+        next_step=None,  # Explicitly None for contract consistency
         execution_mode=execution_mode,
         execution_metadata=ExecutionMetadata(
             execution_time_ms=execution_time_ms,

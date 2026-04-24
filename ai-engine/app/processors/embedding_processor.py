@@ -2,24 +2,24 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def run(input_data: dict, context: dict, execution_mode: str) -> dict:
-    """
-    Standardized Embedding Processor.
-    """
-    domain = context.get("domain", "unknown")
+def run(input_data: dict, context: dict, target_mode: str) -> tuple:
+    """Standardized Embedding Processor with Internal Fallback."""
     trace_id = context.get("trace_id", "unknown")
+    current_mode = target_mode
     
-    logger.info(f"[Trace: {trace_id}] Generating embeddings for domain {domain} in {execution_mode} mode")
-    
-    if execution_mode == "FULL":
-        embedding = [0.1, 0.2, 0.3, 0.4, 0.5]
-    elif execution_mode == "PARTIAL":
-        embedding = [0.1, 0.2, 0.3]
-    else:
-        embedding = [0.0]
-        
-    return {
-        "embedding": embedding,
-        "execution_mode": execution_mode,
-        "domain": domain
-    }
+    if current_mode == "FULL":
+        try:
+            logger.info(f"[Trace: {trace_id}] EmbeddingProcessor: Executing FULL mode")
+            return {"embedding": [0.1, 0.2, 0.3, 0.4, 0.5]}, "FULL"
+        except Exception:
+            current_mode = "PARTIAL"
+
+    if current_mode == "PARTIAL":
+        try:
+            logger.info(f"[Trace: {trace_id}] EmbeddingProcessor: Executing PARTIAL mode")
+            return {"embedding": [0.1, 0.2, 0.3], "partial": True}, "PARTIAL"
+        except Exception:
+            current_mode = "FALLBACK"
+
+    logger.info(f"[Trace: {trace_id}] EmbeddingProcessor: Executing FALLBACK mode")
+    return {"embedding": [0.0], "fallback": True}, "FALLBACK"

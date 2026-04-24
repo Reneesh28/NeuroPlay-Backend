@@ -6,7 +6,7 @@ class ExecutionMetadata(BaseModel):
     mode: str = Field(..., description="FULL, PARTIAL, or FALLBACK")
 
 class ErrorDetail(BaseModel):
-    type: str = Field(..., description="TRANSIENT, SYSTEM, or PERMANENT")
+    type: str = Field(..., description="TRANSIENT, SYSTEM, PERMANENT, or ML_FAILURE")
     message: str
     details: Optional[Dict[str, Any]] = None
 

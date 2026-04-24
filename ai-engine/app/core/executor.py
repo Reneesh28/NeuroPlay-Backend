@@ -19,6 +19,7 @@ def _validate_context(context: ExecutionContext):
     Reject execution if any field is missing or inconsistent.
     """
     required_fields = [
+        "user_id", "session_id",
         "domain", "game_id", "trace_id", 
         "feature_version", "pipeline_version"
     ]
@@ -60,7 +61,7 @@ def execute_pipeline_step(req: ExecuteRequest) -> ExecuteResponse:
         
         # 5. Saver: Persist output data
         # Executor does NOT access DB directly
-        output_ref = save_output_data(result_data, req.context.model_dump())
+        output_ref = save_output_data(result_data, req.context.model_dump(), req.step, req.input_ref)
         
         execution_time_ms = int((time.time() - start_time) * 1000)
         
