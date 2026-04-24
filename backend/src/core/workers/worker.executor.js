@@ -4,102 +4,141 @@ const { assertValidStep } = require("../pipeline/step.validator");
 const { updateStepStatus } = require("../jobs/job.service");
 const { validateWorkerPayload } = require("./worker.validator");
 const producer = require("../queue/producer");
+
 const { classifyError, ErrorTypes } = require("../resilience/error.classifier");
 const { handleDeadJob } = require("../resilience/dlq.handler");
 const { shouldRetry } = require("../resilience/retry.manager");
 const { TIMEOUT_CONFIG } = require("../resilience/timeout.manager");
 
-
-
+const { VALID_EXECUTION_MODES, EXECUTION_MODES } = require("../constants/execution.constants");
 
 /**
- * 🔥 SINGLE STEP EXECUTION ENGINE (Refactored)
- * Worker = Execution + Forwarding only. No decision making.
+ * 🔥 FINAL WORKER EXECUTION ENGINE (STEP 4.3 READY)
  */
 const executeJobStep = async (payload) => {
-    // 1. Validate Payload
     validateWorkerPayload(payload);
 
     const { job_id, step, input_ref, context } = payload;
     const trace_id = context?.trace_id || "no-trace";
 
-    console.log(`[JOB:START] [${step}] [ID:${job_id}] [TRACE:${trace_id}] 🚀 Starting step execution`);
+    console.log(`[JOB:START] [${step}] [ID:${job_id}] [TRACE:${trace_id}] 🚀`);
 
-    // 2. Trust Payload Input
+    if (!input_ref) {
+        throw new Error(`Missing input_ref for step: ${step}`);
+    }
+
     const inputData = input_ref;
 
     const processor = stepRegistry[step];
-    if (!processor) {
-        console.error(`[JOB:ERROR] [${step}] [ID:${job_id}] [TRACE:${trace_id}] ❌ Processor not found`);
-        throw new Error(`Processor not found for step: ${step}`);
-    }
+    if (!processor) throw new Error(`Processor not found for step: ${step}`);
 
-    // 3. Fetch Job for Update Context
     const job = await Job.findOne({ job_id });
-    if (!job) {
-        console.error(`[JOB:ERROR] [${step}] [ID:${job_id}] [TRACE:${trace_id}] ❌ Job not found in DB`);
-        throw new Error(`Job not found: ${job_id}`);
-    }
+    if (!job) throw new Error(`Job not found: ${job_id}`);
 
     if (job.current_step !== step) {
-        console.warn(`[JOB:WARN] [${step}] [ID:${job_id}] [TRACE:${trace_id}] ⚠️ Step mismatch: expected ${job.current_step}`);
         throw new Error(`Step mismatch: expected ${job.current_step}, got ${step}`);
     }
 
+    // 🔥 STEP 4.3 — SET JOB START TIME (ONLY ONCE)
+    if (!job.started_at) {
+        job.started_at = new Date();
+        job.last_heartbeat = new Date(); // initialize heartbeat
+        await job.save();
+
+        console.log(`[JOB:INIT] Job ${job_id} started at ${job.started_at.toISOString()}`);
+    }
+
+    let execution_mode = EXECUTION_MODES.FULL;
+
     try {
-        console.log(`[JOB:INFO] [${step}] [ID:${job_id}] [TRACE:${trace_id}] ➡️ Calling processor...`);
+        console.log(`[JOB:EXEC] [${step}]`);
 
-        // 4. EXECUTION
-        const result = await processor(job, inputData);
+        // 🔥 TIMEOUT WRAP
+        const result = await Promise.race([
+            processor(job, inputData),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("STEP_TIMEOUT")), TIMEOUT_CONFIG.STEP_TIMEOUT)
+            )
+        ]);
 
-        // 5. Response Validation
+        // 🔥 STRICT RESPONSE VALIDATION
         if (!result || typeof result !== "object") {
             throw new Error("Invalid processor response contract");
         }
 
-        if (result.status === "failed") {
-            throw new Error(result.error?.message || "Processor execution reported failure");
+        if (result.status !== "completed") {
+            throw new Error(result.error?.message || "Processor failed");
         }
 
-        // 6. UPDATE & FORWARD
-        const output_ref = result?.output ?? null;
-        const next_step = result?.next_step ?? null;
-        const execution_mode = result?.execution_mode ?? "FULL";
+        if (!("output" in result)) {
+            throw new Error("Missing output in processor response");
+        }
+
+        if (!("execution_mode" in result)) {
+            throw new Error("Missing execution_mode from AI response");
+        }
+
+        if (!VALID_EXECUTION_MODES.includes(result.execution_mode)) {
+            throw new Error(`Invalid execution_mode: ${result.execution_mode}`);
+        }
+
+        execution_mode = result.execution_mode;
+
+        const output_ref = result.output;
+        const next_step = result.next_step || null;
 
         if (next_step) assertValidStep(next_step);
 
+        // 🔥 PARTIAL MODE LOGGING
+        if (execution_mode === EXECUTION_MODES.PARTIAL) {
+            console.warn(`[JOB:PARTIAL] ${step} executed with degraded quality`);
+        }
+
+        // 🔥 UPDATE JOB
         const updatedJob = await updateStepStatus(job._id, step, {
             status: "completed",
-            output_ref: output_ref,
-            next_step: next_step,
-            execution_mode: execution_mode,
-            resolved_model_version: result?.model_version ?? null
+            output_ref,
+            next_step,
+            execution_mode,
+            resolved_model_version: result.model_version ?? null
         });
 
-        console.log(`[JOB:STEP_OK] [${step}] [ID:${job_id}] [TRACE:${trace_id}] ✅ Step completed. Mode: ${execution_mode}`);
+        console.log(`[JOB:OK] [${step}] [MODE:${execution_mode}]`);
 
-        // 7. NEXT STEP ENQUEUING
+        // 🔥 FORWARD
         if (next_step) {
             await producer.enqueueJobStep(updatedJob, next_step, output_ref);
-            console.log(`[JOB:FORWARD] [${step}] [ID:${job_id}] [TRACE:${trace_id}] ➡️ Forwarding to ${next_step}`);
+            console.log(`[JOB:NEXT] ${step} → ${next_step}`);
         } else {
-            console.log(`[JOB:FINISH] [${step}] [ID:${job_id}] [TRACE:${trace_id}] 🏁 Job lifecycle finished`);
+            console.log(`[JOB:DONE] ${job_id}`);
         }
 
     } catch (error) {
-        // 🔥 Use Centralized Resilience Layer
         const errorType = classifyError(error);
-        const retryCount = payload.attemptsMade || 0; // BullMQ provides this
 
-        console.error(`[JOB:FAIL] [${step}] [ID:${job_id}] [TRACE:${trace_id}] ❌ Error [${errorType}]: ${error.message}`);
+        const retryCount =
+            job?.steps?.find(s => s.name === step)?.retries || 0;
 
-        // 1. Handle ML_FAILURE → Continue if possible (Strategy: FALLBACK)
-        if (errorType === ErrorTypes.ML_FAILURE && error.next_step) {
-            console.warn(`[JOB:FALLBACK] [${step}] [ID:${job_id}] [TRACE:${trace_id}] ⚠️ ML Failure, continuing to ${error.next_step}`);
-            
+        console.error(`[JOB:FAIL] [${step}] [${errorType}] ${error.message}`);
+
+        // 🔥 FALLBACK MODE
+        if (execution_mode === EXECUTION_MODES.FALLBACK && error.next_step) {
             const updatedJob = await updateStepStatus(job._id, step, {
                 status: "completed",
-                execution_mode: "FALLBACK",
+                execution_mode: EXECUTION_MODES.FALLBACK,
+                error: { message: error.message, type: errorType },
+                next_step: error.next_step
+            });
+
+            await producer.enqueueJobStep(updatedJob, error.next_step, inputData);
+            return;
+        }
+
+        // 🔥 ML FAILURE
+        if (errorType === ErrorTypes.ML_FAILURE && error.next_step) {
+            const updatedJob = await updateStepStatus(job._id, step, {
+                status: "completed",
+                execution_mode: EXECUTION_MODES.FALLBACK,
                 error: { message: error.message, type: ErrorTypes.ML_FAILURE },
                 next_step: error.next_step
             });
@@ -108,28 +147,22 @@ const executeJobStep = async (payload) => {
             return;
         }
 
-        // 2. Fail the step in DB
+        // 🔴 FAIL STEP
         await updateStepStatus(job._id, step, {
             status: "failed",
-            error: {
-                message: error.message,
-                type: errorType
-            }
+            execution_mode,
+            error: { message: error.message, type: errorType }
         });
 
-        // 3. Decide on Retry vs DLQ
-        if (shouldRetry(errorType, retryCount)) {
-            console.log(`[JOB:RETRY] [${step}] [ID:${job_id}] [TRACE:${trace_id}] 🔄 Attempt ${retryCount + 1} - Retrying...`);
-            throw error; // Let BullMQ handle the backoff
+        // 🔁 RETRY DECISION
+        if (shouldRetry(errorType, retryCount, execution_mode)) {
+            console.log(`[JOB:RETRY] attempt ${retryCount + 1}`);
+            throw error;
         }
 
-        // 4. Move to DLQ on Permanent/Exhausted Failure
-        console.error(`[JOB:DEAD] [${step}] [ID:${job_id}] [TRACE:${trace_id}] 💀 Giving up. Moving to DLQ.`);
+        // 💀 DLQ
         await handleDeadJob(job, step, error);
     }
-
-
-
 };
 
 module.exports = {

@@ -4,6 +4,9 @@ const connectDB = require("./src/config/db");
 require("./src/config/redis");
 const env = require("./src/config/env");
 
+// 🔥 STEP 4.5 — IMPORT RECOVERY SCHEDULER
+const { startRecoveryScheduler } = require("./src/core/recovery/recovery.scheduler");
+
 const PORT = env.port || 5000;
 
 // Connect DB
@@ -11,4 +14,7 @@ connectDB();
 
 app.listen(PORT, () => {
     console.log(`🚀 Backend running on port ${PORT}`);
+
+    // 🔥 START RECOVERY SYSTEM AFTER SERVER BOOTS
+    startRecoveryScheduler();
 });

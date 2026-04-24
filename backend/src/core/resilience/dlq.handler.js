@@ -1,31 +1,31 @@
 const producer = require("../queue/producer");
 
 /**
- * 🔥 DLQ HANDLER
- * Manages the transition of failed jobs to the Dead Letter Queue.
- * Ensures metadata is enriched before burial.
+ * 🔥 DLQ HANDLER (FIXED)
  */
 async function handleDeadJob(job, step, error) {
     if (!job || !step) {
         throw new Error("Job and Step are required for DLQ handling");
     }
 
+    const stepData = job.steps.find(s => s.name === step);
+
     const deadPayload = {
         job_id: job.job_id,
-        step: step,
+        step,
         error: typeof error === "string" ? error : error.message,
         failed_at: new Date().toISOString(),
         trace_id: job.context?.trace_id,
-        
-        // Enrich with last known state
-        last_execution_mode: job.execution_mode,
-        completed_steps: job.completed_steps_count,
-        total_steps: job.total_steps_count
+
+        // 🔥 FIXED (step-level, not job-level)
+        last_execution_mode: stepData?.execution_mode || "UNKNOWN",
+
+        completed_steps: job.steps.filter(s => s.status === "completed").length,
+        total_steps: job.steps.length
     };
 
-    console.error(`[DLQ:BURIAL] 💀 Job ${job.job_id} is dead. Burying in DLQ...`);
+    console.error(`[DLQ:BURIAL] 💀 Job ${job.job_id} is dead`);
 
-    // Call producer to move it to the actual queue
     return await producer.moveToDLQ(job, step, deadPayload);
 }
 

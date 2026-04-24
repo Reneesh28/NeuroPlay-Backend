@@ -1,0 +1,12 @@
+const EXECUTION_MODES = {
+    FULL: "FULL",
+    PARTIAL: "PARTIAL",
+    FALLBACK: "FALLBACK"
+};
+
+const VALID_EXECUTION_MODES = Object.values(EXECUTION_MODES);
+
+module.exports = {
+    EXECUTION_MODES,
+    VALID_EXECUTION_MODES
+};

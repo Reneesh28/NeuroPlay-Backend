@@ -1,23 +1,25 @@
 const { ErrorTypes } = require("./error.classifier");
-
-/**
- * 🔥 RETRY MANAGER
- * Controls the retry strategy based on error classification.
- */
+const { EXECUTION_MODES } = require("../constants/execution.constants");
 
 const RETRY_CONFIG = {
     MAX_RETRIES: 3,
-    INITIAL_DELAY: 1000, // 1 second
-    BACKOFF_FACTOR: 2    // Exponential
+    INITIAL_DELAY: 1000,
+    BACKOFF_FACTOR: 2
 };
 
-function shouldRetry(errorType, retryCount) {
-    // Only TRANSIENT errors should be retried
-    if (errorType !== ErrorTypes.TRANSIENT) {
-        return false;
+function shouldRetry(errorType, retryCount, executionMode = EXECUTION_MODES.FULL) {
+
+    if (executionMode === EXECUTION_MODES.FALLBACK) return false;
+
+    if (errorType === ErrorTypes.ML_FAILURE) return false;
+
+    if (errorType === ErrorTypes.PERMANENT) return false;
+
+    if (errorType === ErrorTypes.TRANSIENT) {
+        return retryCount < RETRY_CONFIG.MAX_RETRIES;
     }
 
-    return retryCount < RETRY_CONFIG.MAX_RETRIES;
+    return false;
 }
 
 function getNextRetryDelay(retryCount) {

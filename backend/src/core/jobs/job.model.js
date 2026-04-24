@@ -32,7 +32,6 @@ const JobSchema = new mongoose.Schema(
     {
         job_id: { type: String, required: true, unique: true },
 
-
         context: {
             user_id: { type: String, required: true },
             session_id: { type: String },
@@ -40,7 +39,6 @@ const JobSchema = new mongoose.Schema(
             game_id: { type: String, required: true },
             domain: { type: String, required: true },
 
-            // 🔥 Grouped versions object
             versions: {
                 model: { type: String },
                 feature: { type: String },
@@ -68,11 +66,29 @@ const JobSchema = new mongoose.Schema(
             enum: ["FULL", "PARTIAL", "FALLBACK"],
             default: "FULL"
         },
+
         total_steps_count: { type: Number, default: 0 },
         completed_steps_count: { type: Number, default: 0 },
-        progress: { type: Number, default: 0 }
+        progress: { type: Number, default: 0 },
 
+        // 🔥 STEP 4 ADDITIONS (CRITICAL)
 
+        started_at: {
+            type: Date,
+            default: null
+        },
+
+        last_heartbeat: {
+            type: Date,
+            default: Date.now,
+            index: true // 🔥 important for stuck job queries
+        },
+
+        // Optional but useful for debugging / analytics
+        finished_at: {
+            type: Date,
+            default: null
+        }
     },
     { timestamps: true }
 );
