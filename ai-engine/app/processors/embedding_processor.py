@@ -1,25 +1,35 @@
 import logging
+from app.core.execution_mode import ExecutionMode
+from app.core.errors import MLError, PartialExecutionTrigger
 
 logger = logging.getLogger(__name__)
 
-def run(input_data: dict, context: dict, target_mode: str) -> tuple:
-    """Standardized Embedding Processor with Internal Fallback."""
+
+def run(input_data: dict, context: dict, execution_mode: str) -> tuple:
     trace_id = context.get("trace_id", "unknown")
-    current_mode = target_mode
-    
-    if current_mode == "FULL":
-        try:
-            logger.info(f"[Trace: {trace_id}] EmbeddingProcessor: Executing FULL mode")
-            return {"embedding": [0.1, 0.2, 0.3, 0.4, 0.5]}, "FULL"
-        except Exception:
-            current_mode = "PARTIAL"
 
-    if current_mode == "PARTIAL":
-        try:
-            logger.info(f"[Trace: {trace_id}] EmbeddingProcessor: Executing PARTIAL mode")
-            return {"embedding": [0.1, 0.2, 0.3], "partial": True}, "PARTIAL"
-        except Exception:
-            current_mode = "FALLBACK"
+    current_mode = execution_mode
 
-    logger.info(f"[Trace: {trace_id}] EmbeddingProcessor: Executing FALLBACK mode")
-    return {"embedding": [0.0], "fallback": True}, "FALLBACK"
+    if current_mode == ExecutionMode.FULL:
+        try:
+            logger.info(f"[Trace: {trace_id}] Embedding FULL")
+            return {"embedding": [0.1, 0.2, 0.3, 0.4, 0.5]}, ExecutionMode.FULL
+
+        except (MLError, PartialExecutionTrigger):
+            current_mode = ExecutionMode.PARTIAL
+
+    if current_mode == ExecutionMode.PARTIAL:
+        try:
+            logger.info(f"[Trace: {trace_id}] Embedding PARTIAL")
+            return {"embedding": [0.1, 0.2, 0.3], "partial": True}, ExecutionMode.PARTIAL
+
+        except Exception:
+            current_mode = ExecutionMode.FALLBACK
+
+    logger.info(f"[Trace: {trace_id}] Embedding FALLBACK")
+
+    return {
+        "embedding": [0.0],
+        "fallback": True,
+        "confidence": 0.0
+    }, ExecutionMode.FALLBACK

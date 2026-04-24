@@ -1,52 +1,52 @@
 import logging
 from app.core.errors import MLError, PartialExecutionTrigger
+from app.core.execution_mode import ExecutionMode
 
 logger = logging.getLogger(__name__)
 
-def run(input_data: dict, context: dict, target_mode: str) -> tuple:
-    """
-    Standardized Video Processor with Internal Fallback.
-    Rule: NEVER re-run externally; handle mode transitions internally.
-    """
+
+def run(input_data: dict, context: dict, execution_mode: str) -> tuple:
     domain = context.get("domain", "unknown")
     trace_id = context.get("trace_id", "unknown")
-    
-    current_mode = target_mode
-    
-    # --- PHASE 1: FULL ML ---
-    if current_mode == "FULL":
+
+    current_mode = execution_mode
+
+    # FULL
+    if current_mode == ExecutionMode.FULL:
         try:
-            logger.info(f"[Trace: {trace_id}] VideoProcessor: Executing FULL mode")
-            # Simulate ML Logic
+            logger.info(f"[Trace: {trace_id}] VideoProcessor FULL")
             return {
                 "processed": True,
                 "domain": domain,
                 "frames_analyzed": 120,
                 "objects_detected": ["person", "car"]
-            }, "FULL"
-        except (MLError, PartialExecutionTrigger) as e:
-            logger.warning(f"[Trace: {trace_id}] FULL mode failed, downgrading internally: {str(e)}")
-            current_mode = "PARTIAL"
-        except Exception as e:
-            logger.error(f"[Trace: {trace_id}] Critical failure in FULL mode: {str(e)}")
-            current_mode = "FALLBACK"
+            }, ExecutionMode.FULL
 
-    # --- PHASE 2: PARTIAL ML ---
-    if current_mode == "PARTIAL":
+        except (MLError, PartialExecutionTrigger):
+            logger.warning(f"[Trace: {trace_id}] FULL → PARTIAL")
+            current_mode = ExecutionMode.PARTIAL
+
+        except Exception as e:
+            logger.error(f"[Trace: {trace_id}] FULL critical: {str(e)}")
+            current_mode = ExecutionMode.FALLBACK
+
+    # PARTIAL
+    if current_mode == ExecutionMode.PARTIAL:
         try:
-            logger.info(f"[Trace: {trace_id}] VideoProcessor: Executing PARTIAL mode")
+            logger.info(f"[Trace: {trace_id}] VideoProcessor PARTIAL")
             return {
                 "processed": True,
                 "domain": domain,
                 "frames_analyzed": 30,
                 "partial": True
-            }, "PARTIAL"
-        except Exception as e:
-            logger.error(f"[Trace: {trace_id}] PARTIAL mode failed: {str(e)}")
-            current_mode = "FALLBACK"
+            }, ExecutionMode.PARTIAL
 
-    # --- PHASE 3: FALLBACK (HEURISTIC) ---
-    logger.info(f"[Trace: {trace_id}] VideoProcessor: Executing FALLBACK mode")
+        except Exception:
+            current_mode = ExecutionMode.FALLBACK
+
+    # FALLBACK (must always succeed)
+    logger.info(f"[Trace: {trace_id}] VideoProcessor FALLBACK")
+
     return {
         "processed": False,
         "domain": domain,
@@ -54,4 +54,4 @@ def run(input_data: dict, context: dict, target_mode: str) -> tuple:
         "status": "fallback",
         "confidence": 0.0,
         "reason": "ml_degradation"
-    }, "FALLBACK"
+    }, ExecutionMode.FALLBACK
