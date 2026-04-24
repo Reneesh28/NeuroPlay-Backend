@@ -4,6 +4,10 @@ const { assertValidStep } = require("../pipeline/step.validator");
 const { updateStepStatus } = require("../jobs/job.service");
 const { validateWorkerPayload } = require("./worker.validator");
 const producer = require("../queue/producer");
+const { classifyError, ErrorTypes } = require("../resilience/error.classifier");
+const { shouldRetry } = require("../resilience/retry.manager");
+const { TIMEOUT_CONFIG } = require("../resilience/timeout.manager");
+
 
 
 /**
@@ -81,31 +85,28 @@ const executeJobStep = async (payload) => {
         }
 
     } catch (error) {
-        const errorType = error.type || "SYSTEM";
+        // 🔥 Use Centralized Resilience Layer
+        const errorType = classifyError(error);
+        const retryCount = payload.attemptsMade || 0; // BullMQ provides this
+
         console.error(`[JOB:FAIL] [${step}] [ID:${job_id}] [TRACE:${trace_id}] ❌ Error [${errorType}]: ${error.message}`);
 
-
-        // 1. Classify Error (if not already classified by processor)
-        // (errorType already derived for logging)
-
-
-        // 2. Handle ML_FAILURE → Continue if possible
-        if (errorType === "ML_FAILURE" && error.next_step) {
-            console.warn(`⚠️ ML Failure in ${step}, continuing in FALLBACK mode to ${error.next_step}`);
-
+        // 1. Handle ML_FAILURE → Continue if possible (Strategy: FALLBACK)
+        if (errorType === ErrorTypes.ML_FAILURE && error.next_step) {
+            console.warn(`[JOB:FALLBACK] [${step}] [ID:${job_id}] [TRACE:${trace_id}] ⚠️ ML Failure, continuing to ${error.next_step}`);
+            
             const updatedJob = await updateStepStatus(job._id, step, {
-                status: "completed", // Mark as completed but with FALLBACK mode
+                status: "completed",
                 execution_mode: "FALLBACK",
-                error: { message: error.message, type: "ML_FAILURE" },
+                error: { message: error.message, type: ErrorTypes.ML_FAILURE },
                 next_step: error.next_step
             });
 
             await producer.enqueueJobStep(updatedJob, error.next_step, inputData);
-
             return;
         }
 
-        // 3. Fail the step
+        // 2. Fail the step in DB
         await updateStepStatus(job._id, step, {
             status: "failed",
             error: {
@@ -114,19 +115,17 @@ const executeJobStep = async (payload) => {
             }
         });
 
-        // 4. Move to DLQ
-        await producer.moveToDLQ(job, step, error.message);
-
-        // 5. Determine if we should throw for BullMQ retry
-        // If PERMANENT or ML_FAILURE (unhandled), do NOT retry
-        if (errorType === "PERMANENT" || errorType === "ML_FAILURE") {
-            console.log(`🚫 Permanent failure in ${step}, skipping retries.`);
-            return; // Exit silently to prevent BullMQ retry
+        // 3. Decide on Retry vs DLQ
+        if (shouldRetry(errorType, retryCount)) {
+            console.log(`[JOB:RETRY] [${step}] [ID:${job_id}] [TRACE:${trace_id}] 🔄 Attempt ${retryCount + 1} - Retrying...`);
+            throw error; // Let BullMQ handle the backoff
         }
 
-        // Otherwise, throw to let BullMQ handle exponential backoff (for TRANSIENT/SYSTEM)
-        throw error;
+        // 4. Move to DLQ on Permanent/Exhausted Failure
+        console.error(`[JOB:DEAD] [${step}] [ID:${job_id}] [TRACE:${trace_id}] 💀 Giving up. Moving to DLQ.`);
+        await producer.moveToDLQ(job, step, error.message);
     }
+
 
 };
 

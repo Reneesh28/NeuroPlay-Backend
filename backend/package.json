@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "worker": "node src/core/workers/worker.js"
+
   },
   "keywords": [],
   "author": "",

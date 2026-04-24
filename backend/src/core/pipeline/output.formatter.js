@@ -1,3 +1,5 @@
+const { classifyError } = require("../resilience/error.classifier");
+
 function formatStepOutput({ step, rawOutput, executionTime }) {
     return {
         status: "completed",
@@ -23,12 +25,7 @@ function formatStepOutput({ step, rawOutput, executionTime }) {
 
 
 function formatErrorOutput({ step, error }) {
-    let type = "SYSTEM";
-    if (error.response) {
-        type = error.response.status >= 500 ? "TRANSIENT" : "PERMANENT";
-    } else if (error.request) {
-        type = "TRANSIENT";
-    }
+    const type = classifyError(error);
 
     return {
         status: "failed",
@@ -42,6 +39,7 @@ function formatErrorOutput({ step, error }) {
         model_version: null
     };
 }
+
 
 
 module.exports = {

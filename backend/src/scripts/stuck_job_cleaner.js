@@ -1,13 +1,16 @@
 const Job = require("../core/jobs/job.model");
 const producer = require("../core/queue/producer");
+const { TIMEOUT_CONFIG } = require("../core/resilience/timeout.manager");
+
 
 /**
  * 🔥 Stuck Job Cleaner
  * Finds jobs stuck in 'processing' state and fails them
  */
 async function cleanStuckJobs() {
-    const STUCK_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+    const STUCK_THRESHOLD = TIMEOUT_CONFIG.STUCK_THRESHOLD;
     const now = new Date();
+
 
     console.log(`🧹 Running Stuck Job Cleaner at ${now.toISOString()}`);
 
