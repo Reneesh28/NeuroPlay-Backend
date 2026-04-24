@@ -5,8 +5,10 @@ const { updateStepStatus } = require("../jobs/job.service");
 const { validateWorkerPayload } = require("./worker.validator");
 const producer = require("../queue/producer");
 const { classifyError, ErrorTypes } = require("../resilience/error.classifier");
+const { handleDeadJob } = require("../resilience/dlq.handler");
 const { shouldRetry } = require("../resilience/retry.manager");
 const { TIMEOUT_CONFIG } = require("../resilience/timeout.manager");
+
 
 
 
@@ -123,8 +125,9 @@ const executeJobStep = async (payload) => {
 
         // 4. Move to DLQ on Permanent/Exhausted Failure
         console.error(`[JOB:DEAD] [${step}] [ID:${job_id}] [TRACE:${trace_id}] 💀 Giving up. Moving to DLQ.`);
-        await producer.moveToDLQ(job, step, error.message);
+        await handleDeadJob(job, step, error);
     }
+
 
 
 };
