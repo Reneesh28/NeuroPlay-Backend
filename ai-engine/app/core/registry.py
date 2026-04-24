@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Dict, Any
+from typing import Callable, Optional, Dict
 from app.processors import (
     video_processor,
     feature_processor,
@@ -8,24 +8,52 @@ from app.processors import (
 )
 from app.core.errors import PermanentError
 
+
 class StepConfig:
     def __init__(self, processor_func: Callable, next_step: Optional[str]):
         self.processor_func = processor_func
         self.next_step = next_step
 
+
+# 🔥 CENTRAL STEP REGISTRY (DETERMINISTIC ROUTING)
 STEP_REGISTRY: Dict[str, StepConfig] = {
-    "video_processing": StepConfig(video_processor.run, "feature_extraction"),
-    "feature_extraction": StepConfig(feature_processor.run, "embedding_generation"),
-    "embedding_generation": StepConfig(embedding_processor.run, "clustering"),
-    "clustering": StepConfig(clustering_processor.run, "simulation"),
-    "simulation": StepConfig(simulation_processor.run, None)
+    "video_processing": StepConfig(
+        processor_func=video_processor.run,
+        next_step="feature_extraction"
+    ),
+    "feature_extraction": StepConfig(
+        processor_func=feature_processor.run,
+        next_step="embedding_generation"
+    ),
+    "embedding_generation": StepConfig(
+        processor_func=embedding_processor.run,
+        next_step="clustering"
+    ),
+    "clustering": StepConfig(
+        processor_func=clustering_processor.run,
+        next_step="simulation"
+    ),
+    "simulation": StepConfig(
+        processor_func=simulation_processor.run,
+        next_step=None  # 🔥 Final step
+    )
 }
 
+
 def get_step_config(step_name: str) -> StepConfig:
-    """Returns the processor and next step configuration for a given step."""
-    if step_name not in STEP_REGISTRY:
+    """
+    Returns the processor and next step configuration for a given step.
+    Enforces strict contract: unknown step = hard fail.
+    """
+    config = STEP_REGISTRY.get(step_name)
+
+    if not config:
         raise PermanentError(
             message=f"Unknown or unregistered step: {step_name}",
-            details={"step": step_name, "valid_steps": list(STEP_REGISTRY.keys())}
+            details={
+                "step": step_name,
+                "valid_steps": list(STEP_REGISTRY.keys())
+            }
         )
-    return STEP_REGISTRY[step_name]
+
+    return config
