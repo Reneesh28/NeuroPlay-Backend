@@ -1,17 +1,19 @@
 const aiService = require("../../../integrations/ai.service");
 const { formatStepOutput, formatErrorOutput } = require("../../pipeline/output.formatter");
 
-async function clusteringProcessor(job) {
+async function clusteringProcessor(job, inputData) {
     const step = "clustering";
 
     try {
         const start = Date.now();
 
         const response = await aiService.execute({
-            job_id: job._id,
+            job_id: job.job_id,
             step,
-            input: job.input_ref,
+            input_ref: inputData,
+            context: job.context,
         });
+
 
         const executionTime = Date.now() - start;
 

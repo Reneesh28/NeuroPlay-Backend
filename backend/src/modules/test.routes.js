@@ -11,19 +11,22 @@ router.post("/test-job", async (req, res, next) => {
         const { input } = req.body; // 🔥 NEW
 
         // Step 1: Create job in DB
-        const job = await jobService.createJob({
+        const { buildContext } = require("../core/jobs/context.builder");
+        const context = buildContext({
             user_id: "test-user",
             session_id: "test-session",
-            steps: pipeline.map((step) => ({
-                name: step,
-            })),
+            game_id: "test-game",
+            domain: "test-domain"
+        });
+
+        const job = await jobService.createJob({
+            context,
+            input_ref: input || { url: "test-url" }
         });
 
         // Step 2: Push to queue WITH input
-        await producer.addJob("test-job", {
-            jobId: job._id,
-            inputData: input || {},
-        });
+        await producer.enqueueJobStep(job, job.current_step);
+
 
         res.json({
             success: true,

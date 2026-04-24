@@ -9,7 +9,7 @@ function aggregateResults(job) {
             status: step.status || "unknown",
 
             // 🔥 Ensure clean output
-            output: step.output ?? null,
+            output: step.output_ref ?? null,
 
             // 🔥 Avoid empty {} → convert to null
             error: step.error && Object.keys(step.error).length > 0

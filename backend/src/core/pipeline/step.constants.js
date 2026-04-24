@@ -7,5 +7,5 @@ const PIPELINE_STEPS = [
 ];
 
 module.exports = {
-    PIPELINE_STEPS,
+    PIPELINE_STEPS
 };

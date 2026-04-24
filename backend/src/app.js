@@ -3,6 +3,7 @@ const cors = require("cors");
 require("dotenv").config();
 const errorHandler = require("./core/middleware/error.middleware");
 const { processJob } = require("./core/workers/worker");
+const { errorMiddleware } = require("./middleware/error.middleware");
 
 const app = express();
 app.use(cors());
@@ -31,5 +32,6 @@ app.post("/api/test/process/:jobId", async (req, res) => {
 });
 
 app.use(errorHandler);
+app.use(errorMiddleware);
 
 module.exports = app;

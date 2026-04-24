@@ -1,12 +1,30 @@
+const { successResponse, errorResponse } = require("../../contracts/api.contract");
+const { resolveDomain } = require("../../core/domain/domain.resolver");
+const { assertValidDomain } = require("../../core/domain/domain.validator");
 const uploadService = require("./upload.service");
 
 async function init(req, res, next) {
     try {
-        const { fileName, totalChunks } = req.body;
+        const { user_id, game_id, payload } = req.validatedBody;
+
+        // 🔥 STEP 1: Resolve domain (DO NOT TRUST USER)
+        const domain = resolveDomain(game_id);
+
+        // 🔥 STEP 2: Validate domain
+        assertValidDomain(domain);
+
+        // 🔥 TEMP: extract upload info
+        const { fileName, totalChunks } = payload || {};
 
         const result = await uploadService.initUpload(fileName, totalChunks);
 
-        res.json({ success: true, data: result });
+        return res.json(
+            successResponse(result, {
+                user_id,
+                game_id,
+                domain
+            })
+        );
     } catch (err) {
         next(err);
     }
@@ -14,7 +32,11 @@ async function init(req, res, next) {
 
 async function uploadChunk(req, res, next) {
     try {
-        const { uploadId, chunkIndex } = req.body;
+        const { uploadId, chunkIndex, game_id } = req.validatedBody;
+
+        // 🔥 Resolve and validate domain
+        const domain = resolveDomain(game_id);
+        assertValidDomain(domain);
 
         const result = await uploadService.uploadChunk(
             uploadId,
@@ -22,7 +44,12 @@ async function uploadChunk(req, res, next) {
             req.file.buffer
         );
 
-        res.json({ success: true, data: result });
+        return res.json(
+            successResponse(result, {
+                uploadId,
+                domain
+            })
+        );
     } catch (err) {
         next(err);
     }
@@ -30,12 +57,22 @@ async function uploadChunk(req, res, next) {
 
 async function complete(req, res, next) {
     try {
-        const { uploadId } = req.body;
-        const userId = req.user?.id || "test_user";
+        const { user_id, game_id, payload } = req.validatedBody;
+        const { uploadId } = payload || {};
 
-        const result = await uploadService.completeUpload(uploadId, userId);
+        // 🔥 Resolve and validate domain
+        const domain = resolveDomain(game_id);
+        assertValidDomain(domain);
 
-        res.json({ success: true, data: result });
+        const result = await uploadService.completeUpload(uploadId, user_id, game_id);
+
+        return res.json(
+            successResponse(result, {
+                user_id,
+                uploadId,
+                domain
+            })
+        );
     } catch (err) {
         next(err);
     }

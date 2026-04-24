@@ -1,9 +1,8 @@
-const STEPS = require("./step.constants");
+const { PIPELINE_STEPS } = require("./step.constants");
 
-module.exports = [
-    STEPS.VIDEO_PROCESSING,
-    STEPS.FEATURE_EXTRACTION,
-    STEPS.EMBEDDING,
-    STEPS.CLUSTERING,
-    STEPS.SIMULATION,
-];
+// 🔥 Ordered execution
+const PIPELINE_ORDER = [...PIPELINE_STEPS];
+
+module.exports = {
+    PIPELINE_ORDER
+};

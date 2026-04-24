@@ -1,9 +1,20 @@
 const { Queue } = require("bullmq");
 const queueConfig = require("./queue.config");
 
-// Default queue (we expand later)
-const defaultQueue = new Queue("default-queue", queueConfig);
+// 🔥 Step-Based Queues
+const ingestionQueue = new Queue("ingestion-queue", queueConfig);
+const processingQueue = new Queue("processing-queue", queueConfig);
+const embeddingQueue = new Queue("embedding-queue", queueConfig);
+const simulationQueue = new Queue("simulation-queue", queueConfig);
+
+// 🔥 Dead Letter Queue (DLQ)
+const deadLetterQueue = new Queue("dead-letter-queue", queueConfig);
 
 module.exports = {
-    defaultQueue,
-};
+    ingestionQueue,
+    processingQueue,
+    embeddingQueue,
+    simulationQueue,
+    deadLetterQueue,
+    defaultQueue: processingQueue // Fallback
+};

@@ -2,8 +2,15 @@ const { v4: uuidv4 } = require("uuid");
 const redis = require("../../config/redis");
 const storageService = require("../../integrations/storage.service");
 const jobService = require("../../core/jobs/job.service");
-const jobQueue = require("../../core/queue/job.queue"); // 🔥 NEW
+const producer = require("../../core/queue/producer");
 const { normalizeInput } = require("../../core/pipeline/input.processor");
+
+
+// 🔥 NEW IMPORTS
+const { buildContext } = require("../../core/jobs/context.builder");
+const { resolveDomain } = require("../../core/domain/domain.resolver");
+
+
 
 const UPLOAD_PREFIX = "upload:";
 
@@ -30,19 +37,25 @@ async function uploadChunk(uploadId, chunkIndex, buffer) {
     const raw = await redis.get(key);
 
     if (!raw) {
-        throw new Error("Upload session not found");
+        const err = new Error("Upload session not found");
+        err.code = "SESSION_NOT_FOUND";
+        throw err;
     }
 
     let data;
     try {
         data = JSON.parse(raw);
     } catch (err) {
-        throw new Error("Corrupted upload session");
+        const error = new Error("Corrupted upload session");
+        error.code = "CORRUPTED_SESSION";
+        throw error;
     }
 
     // 🔥 Validate chunk index
     if (chunkIndex < 0 || chunkIndex >= data.totalChunks) {
-        throw new Error("Invalid chunk index");
+        const err = new Error("Invalid chunk index");
+        err.code = "INVALID_CHUNK_INDEX";
+        throw err;
     }
 
     await storageService.saveChunk(uploadId, chunkIndex, buffer);
@@ -56,23 +69,29 @@ async function uploadChunk(uploadId, chunkIndex, buffer) {
     return { received: data.receivedChunks.length };
 }
 
-async function completeUpload(uploadId, userId) {
+async function completeUpload(uploadId, userId, game_id) {
     const key = `${UPLOAD_PREFIX}${uploadId}`;
     const raw = await redis.get(key);
 
     if (!raw) {
-        throw new Error("Upload session not found");
+        const err = new Error("Upload session not found");
+        err.code = "SESSION_NOT_FOUND";
+        throw err;
     }
 
     let data;
     try {
         data = JSON.parse(raw);
     } catch (err) {
-        throw new Error("Corrupted upload session");
+        const error = new Error("Corrupted upload session");
+        error.code = "CORRUPTED_SESSION";
+        throw error;
     }
 
     if (data.receivedChunks.length !== data.totalChunks) {
-        throw new Error("Not all chunks uploaded");
+        const err = new Error("Not all chunks uploaded");
+        err.code = "INCOMPLETE_UPLOAD";
+        throw err;
     }
 
     // 🔥 STEP 1: Merge file
@@ -87,19 +106,27 @@ async function completeUpload(uploadId, userId) {
         file_path: filePath,
     });
 
-    // 🔥 STEP 3: Create job
-    const job = await jobService.createJob({
+    // 🔥 STEP 3: DOMAIN RESOLUTION (DYNAMIC)
+    const domain = resolveDomain(game_id);
+
+    // 🔥 STEP 4: BUILD CONTEXT
+    const context = buildContext({
         user_id: userId,
-        type: "video_processing",
+        game_id,
+        domain,
+    });
+
+    // 🔥 STEP 5: CREATE JOB
+    const job = await jobService.createJob({
+        context,
         input_ref: normalizedInput,
     });
 
-    // 🔥 STEP 4: PUSH TO QUEUE (CRITICAL)
-    await jobQueue.add("processJob", {
-        jobId: job._id.toString(),
-    });
+    // 🔥 STEP 6: ENQUEUE JOB
+    await producer.enqueueJobStep(job, job.current_step);
 
-    // 🔥 STEP 5: Cleanup Redis
+
+    // 🔥 STEP 8: CLEANUP
     await redis.del(key);
 
     return {

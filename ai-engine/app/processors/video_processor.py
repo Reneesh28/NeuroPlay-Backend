@@ -1,8 +1,7 @@
-def process_video(input_data):
-    file_path = input_data.get("data", {}).get("file_path") \
-        or input_data.get("data", {}).get("payload")
-
+def process_video(input_ref: str, context: dict):
+    domain = context.get("domain", "unknown")
+    
     return {
-        "message": "Video processed successfully",
-        "file_path": file_path
+        "output_ref": f"{input_ref}_video_out" if input_ref else "new_video_out",
+        "message": f"Video processed successfully for domain {domain}"
     }
