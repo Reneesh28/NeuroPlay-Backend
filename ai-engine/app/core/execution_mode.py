@@ -1,7 +1,7 @@
 import traceback
 import logging
-from typing import Callable, Any, Tuple
-from app.core.errors import TransientError, SystemError, PermanentError, PartialExecutionTrigger
+from typing import Callable, Any, Tuple, Dict
+from app.core.errors import TransientError, SystemError, PermanentError, PartialExecutionTrigger, MLError
 
 logger = logging.getLogger(__name__)
 
@@ -10,74 +10,66 @@ class ExecutionMode:
     PARTIAL = "PARTIAL"
     FALLBACK = "FALLBACK"
 
-def run_with_fallback(processor_func: Callable, input_ref: str, context: dict) -> Tuple[Any, str]:
+def run_with_fallback(processor_func: Callable, input_data: Dict[str, Any], context: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
     """
-    Executes a processor function with graceful ML degradation.
-    Returns a tuple of (result, executed_mode).
+    Executes a processor function with monotonic ML degradation:
+    FULL -> PARTIAL -> FALLBACK
+    
+    Rules:
+    - NO retry logic.
+    - NEVER re-run same step in different mode if it already succeeded partially.
+    - Explicit logging of all downgrade events.
     """
+    trace_id = context.get("trace_id", "unknown")
+    
+    # --- PHASE 1: ATTEMPT FULL ---
     try:
-        # Attempt FULL execution
-        result = processor_func(input_ref, context)
+        logger.info(f"[Trace: {trace_id}] Attempting FULL execution mode")
+        result = processor_func(input_data, context, ExecutionMode.FULL)
         return result, ExecutionMode.FULL
-    except PartialExecutionTrigger:
-        logger.warning("Partial ML execution triggered")
-        # In a real scenario, the processor might return partial data directly 
-        # instead of raising, or we execute a specific partial logic.
-        # Simulating partial result here:
-        partial_result = _execute_partial(processor_func, input_ref, context)
-        return partial_result, ExecutionMode.PARTIAL
-    except TransientError as e:
-        # Re-raise to allow the queue worker to retry the job
-        logger.warning(f"Transient error during ML execution, re-raising for retry: {str(e)}")
+        
+    except (MLError, PartialExecutionTrigger) as e:
+        logger.warning(f"[Trace: {trace_id}] FULL mode failed/triggered downgrade. Reason: {str(e)}")
+        return _run_partial(processor_func, input_data, context)
+        
+    except (TransientError, PermanentError):
+        # These are NOT handled by fallback logic.
+        # Transient = worker retry, Permanent = fail.
         raise
-    except PermanentError as e:
-        # Re-raise for invalid schema or contract violation (should fail job completely)
-        logger.error(f"Permanent error during ML execution, aborting: {str(e)}")
-        raise
-    except SystemError as e:
-        # Internal engine error, downgrade to FALLBACK
-        logger.error(f"System error during ML execution, downgrading to FALLBACK: {str(e)}")
-        logger.error(traceback.format_exc())
-        return _execute_fallback(processor_func, input_ref, context), ExecutionMode.FALLBACK
+        
     except Exception as e:
-        # Catch-all for unexpected ML model crashes (e.g., CUDA out of memory, unhandled exceptions)
-        logger.error(f"Unexpected ML crash, downgrading to FALLBACK: {str(e)}")
+        logger.error(f"[Trace: {trace_id}] Unexpected system error in FULL mode: {str(e)}")
         logger.error(traceback.format_exc())
-        return _execute_fallback(processor_func, input_ref, context), ExecutionMode.FALLBACK
+        return _run_fallback(processor_func, input_data, context)
 
-def _execute_fallback(processor_func: Callable, input_ref: str, context: dict) -> Any:
-    """
-    Executes a heuristic or generic fallback logic.
-    For now, returns an empty or mock representation to keep the pipeline moving.
-    """
-    logger.info("Executing fallback heuristic...")
-    return {
-        "output_ref": f"{input_ref}_fallback",
-        "fallback": True,
-        "execution_mode": "FALLBACK"
-    }
-
-def _execute_partial(processor_func: Callable, input_ref: str, context: dict) -> Any:
-    """
-    Executes degraded ML pipeline.
-    Attempts processor execution, falls back only if needed.
-    """
-    logger.info("Executing partial ML execution...")
-
+def _run_partial(processor_func: Callable, input_data: Dict[str, Any], context: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
+    """Phase 2: Attempt PARTIAL execution"""
+    trace_id = context.get("trace_id", "unknown")
+    
     try:
-        result = processor_func(input_ref, context)
+        logger.info(f"[Trace: {trace_id}] Downgrading to PARTIAL execution mode")
+        result = processor_func(input_data, context, ExecutionMode.PARTIAL)
+        return result, ExecutionMode.PARTIAL
+        
+    except Exception as e:
+        logger.error(f"[Trace: {trace_id}] PARTIAL mode failed: {str(e)}")
+        return _run_fallback(processor_func, input_data, context)
 
-        if not isinstance(result, dict) or "output_ref" not in result:
-            raise Exception("Invalid partial output")
-
-        result["partial"] = True
-        result["execution_mode"] = "PARTIAL"
-
-        return result
-
-    except Exception:
+def _run_fallback(processor_func: Callable, input_data: Dict[str, Any], context: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
+    """Phase 3: Guaranteed FALLBACK execution"""
+    trace_id = context.get("trace_id", "unknown")
+    
+    logger.error(f"[Trace: {trace_id}] FINAL DOWNGRADE: Executing FALLBACK mode")
+    
+    try:
+        # We still call the processor in FALLBACK mode to ensure structured output
+        result = processor_func(input_data, context, ExecutionMode.FALLBACK)
+        return result, ExecutionMode.FALLBACK
+    except Exception as e:
+        # Absolute last resort: Manual emergency fallback structure
+        logger.critical(f"[Trace: {trace_id}] FALLBACK MODE CRASHED: {str(e)}")
         return {
-            "output_ref": f"{input_ref}_partial",
-            "partial": True,
-            "execution_mode": "PARTIAL"
-        }
+            "fallback_emergency": True,
+            "status": "degraded",
+            "message": "Critical failure in all execution modes"
+        }, ExecutionMode.FALLBACK

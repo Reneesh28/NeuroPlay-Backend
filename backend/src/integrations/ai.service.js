@@ -10,8 +10,8 @@ function validateAIResponse(response) {
         throw new Error("Invalid AI response");
     }
 
-    if (!("output" in response)) {
-        throw new Error("AI response missing output");
+    if (!("output_ref" in response)) {
+        throw new Error("AI response missing output_ref");
     }
 
     if (!("execution_mode" in response)) {

@@ -16,4 +16,5 @@ class ExecuteRequest(BaseModel):
     job_id: str
     step: str
     input_ref: Optional[str] = None
+    input_type: str
     context: ExecutionContext

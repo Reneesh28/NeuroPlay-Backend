@@ -14,6 +14,7 @@ class ExecuteResponse(BaseModel):
     status: str = Field(..., description="success or failed")
     output_ref: Optional[str] = None
     next_step: Optional[str] = None
+    execution_mode: str = Field(..., description="FULL, PARTIAL, or FALLBACK")
     resolved_model_version: Optional[str] = None
     execution_metadata: ExecutionMetadata
     error: Optional[ErrorDetail] = None

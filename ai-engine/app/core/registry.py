@@ -1,9 +1,11 @@
 from typing import Callable, Optional, Dict, Any
-from app.processors.video_processor import process_video
-from app.processors.feature_processor import process_feature 
-from app.processors.embedding_processor import process_embedding
-from app.processors.clustering_processor import process_clustering
-from app.processors.simulation_processor import process_simulation
+from app.processors import (
+    video_processor,
+    feature_processor,
+    embedding_processor,
+    clustering_processor,
+    simulation_processor
+)
 from app.core.errors import PermanentError
 
 class StepConfig:
@@ -12,11 +14,11 @@ class StepConfig:
         self.next_step = next_step
 
 STEP_REGISTRY: Dict[str, StepConfig] = {
-    "video_processing": StepConfig(process_video, "feature_extraction"),
-    "feature_extraction": StepConfig(process_feature, "embedding_generation"),
-    "embedding_generation": StepConfig(process_embedding, "clustering"),
-    "clustering": StepConfig(process_clustering, "simulation"),
-    "simulation": StepConfig(process_simulation, None)
+    "video_processing": StepConfig(video_processor.run, "feature_extraction"),
+    "feature_extraction": StepConfig(feature_processor.run, "embedding_generation"),
+    "embedding_generation": StepConfig(embedding_processor.run, "clustering"),
+    "clustering": StepConfig(clustering_processor.run, "simulation"),
+    "simulation": StepConfig(simulation_processor.run, None)
 }
 
 def get_step_config(step_name: str) -> StepConfig:
