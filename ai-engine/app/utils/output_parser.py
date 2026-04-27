@@ -2,29 +2,26 @@ import json
 
 
 def parse_llm_output(text: str):
-    """
-    Extracts JSON safely from LLM response
-    """
+
+    if not text or "{" not in text:
+        return fallback()
 
     try:
-        # Direct parse (best case)
         return json.loads(text)
 
     except:
         try:
-            # Extract JSON from messy output
             start = text.find("{")
             end = text.rfind("}") + 1
-
-            json_str = text[start:end]
-
-            return json.loads(json_str)
-
+            return json.loads(text[start:end])
         except:
-            # Final fallback
-            return {
-                "predicted_action": "hold position",
-                "confidence": 0.5,
-                "reasoning": "Failed to parse model output",
-                "coaching_tip": "Stay alert and reposition"
-            }
+            return fallback()
+
+
+def fallback():
+    return {
+        "predicted_action": "hold position",
+        "confidence": 0.5,
+        "reasoning": "Parsing failed",
+        "coaching_tip": "Play safe"
+    }

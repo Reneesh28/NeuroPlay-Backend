@@ -11,7 +11,6 @@ class ExecutionMode:
     PARTIAL = "PARTIAL"
     FALLBACK = "FALLBACK"
 
-
 def run_with_fallback(
     processor_func: Callable,
     input_data: Dict[str, Any],

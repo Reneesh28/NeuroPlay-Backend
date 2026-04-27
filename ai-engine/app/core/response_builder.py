@@ -15,14 +15,9 @@ def build_success_response(
     Standardized Success Response Builder.
     Ensures contract compliance and validates next_step integrity.
     """
-    # Rule: AI MUST ALWAYS return output_ref
     if not output_ref:
         logger.error("Attempted to build success response without output_ref")
-        # This shouldn't happen if executor is working correctly, but we guard it
         raise ValueError("output_ref is mandatory for success response")
-
-    # Step validation logic could be added here if we want to be extra strict,
-    # but the executor already uses get_step_config which handles registry lookup.
     
     return ExecuteResponse(
         status="success",
@@ -49,7 +44,7 @@ def build_error_response(
     """
     return ExecuteResponse(
         status="failed",
-        next_step=None,  # Explicitly None for contract consistency
+        next_step=None,
         execution_mode=execution_mode,
         execution_metadata=ExecutionMetadata(
             execution_time_ms=execution_time_ms,
@@ -62,14 +57,11 @@ def build_error_response(
         )
     )
 
-def normalize_simulation_output(data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Ensures consistent structure and safe values for simulation results.
-    Separates domain logic from orchestration.
-    """
+def build_response(data: dict, mode):
     return {
-        "predicted_action": str(data.get("predicted_action", "hold position")),
+        "predicted_action": str(data.get("predicted_action", "hold position")).lower(),
         "confidence": float(max(0.0, min(data.get("confidence", 0.5), 1.0))),
-        "reasoning": str(data.get("reasoning", "No reasoning provided"))[:300],
-        "coaching_tip": str(data.get("coaching_tip", "Stay aware"))[:200]
+        "reasoning": str(data.get("reasoning", ""))[:300],
+        "coaching_tip": str(data.get("coaching_tip", ""))[:200],
+        "execution_mode": mode  # ✅ fixed
     }

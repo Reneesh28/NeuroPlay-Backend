@@ -1,120 +1,91 @@
 import logging
-
 from app.core.execution_mode import ExecutionMode
 from app.models.llm_loader import call_llm
 from app.prompting.templates import build_simulation_prompt
 from app.utils.output_parser import parse_llm_output
 from app.pipeline.validators.simulation_output import validate_simulation_output
-from app.core.response_builder import normalize_simulation_output
-from app.core.error_classifier import classify_exception
+from app.core.response_builder import build_response
+from app.core.error_classifier import classify_error
 
 logger = logging.getLogger(__name__)
 
 
+def calibrate_confidence(confidence, mode):
+    try:
+        confidence = float(confidence)
+    except:
+        confidence = 0.5
+
+    if mode == ExecutionMode.FULL:
+        return min(confidence, 0.9)
+
+    elif mode == ExecutionMode.PARTIAL:
+        return min(confidence, 0.6)
+
+    return 0.5
+
+
+def fallback_response():
+    return {
+        "predicted_action": "hold position",
+        "confidence": 0.5,
+        "reasoning": "Fallback action applied",
+        "coaching_tip": "Play safe and gather info"
+    }
+
+
+def partial_response():
+    return {
+        "predicted_action": "hold position",
+        "confidence": 0.6,
+        "reasoning": "System degraded, applying conservative strategy",
+        "coaching_tip": "Focus on safety and positioning"
+    }
 
 
 def run(input_data: dict, context: dict, execution_mode: str) -> tuple:
-    """
-    Simulation step with LLM + prompt + parser + validation + consistency layer
-    """
-
     trace_id = context.get("trace_id", "unknown")
-    current_mode = execution_mode
 
-    # 🔹 FALLBACK MODE (NO LLM)
-    if current_mode == ExecutionMode.FALLBACK:
-        logger.info(f"[Trace: {trace_id}] Simulation FALLBACK")
-
-        output = {
-            "predicted_action": "hold position",
-            "confidence": 0.5,
-            "reasoning": "Fallback logic applied",
-            "coaching_tip": "Play safe and gather more information"
-        }
-
-        return normalize_simulation_output(output), ExecutionMode.FALLBACK
+    if execution_mode == ExecutionMode.FALLBACK:
+        logger.info(f"[Trace: {trace_id}] MODE: {execution_mode}")
+        return build_response(fallback_response(), execution_mode), ExecutionMode.FALLBACK
 
     try:
-        logger.info(f"[Trace: {trace_id}] Simulation {current_mode}")
+        # 🔹 Prompt
+        prompt = build_simulation_prompt(input_data, context, execution_mode)
+        logger.info(f"[Trace: {trace_id}] PROMPT: {prompt}")
 
-        # 🔹 Build prompt
-        prompt = build_simulation_prompt(
-            input_data=input_data,
-            context=context,
-            mode=current_mode
-        )
-        logger.debug(f"[Trace: {trace_id}] Mode: {current_mode} | Prompt: {prompt}")
+        # 🔹 LLM Call
+        raw = call_llm(prompt)
+        logger.info(f"[Trace: {trace_id}] RAW RESPONSE: {raw}")
 
-        # 🔹 Call LLM
-        raw_response = call_llm(prompt)
-        logger.info(f"[Trace: {trace_id}] LLM call completed")
-        logger.debug(f"[Trace: {trace_id}] Raw Response: {raw_response}")
+        if not raw:
+            raise Exception("LLM returned empty response")
 
-        if raw_response is None:
-            raise Exception("LLM returned None")
+        # 🔹 Parse
+        parsed = parse_llm_output(raw)
+        logger.info(f"[Trace: {trace_id}] PARSED: {parsed}")
 
-        # 🔹 Parse output
-        parsed = parse_llm_output(raw_response)
-        logger.info(f"[Trace: {trace_id}] Parsing successful")
-        logger.debug(f"[Trace: {trace_id}] Parsed Data: {parsed}")
+        if not parsed:
+            raise Exception("Parsed output is empty")
 
-        # 🔹 Validate schema
+        # 🔹 Validate
         validated = validate_simulation_output(parsed)
 
-        # 🔹 Confidence calibration (Strict System Control)
-        raw_confidence = validated.get("confidence", 0.5)
+        # 🔹 Confidence control
+        validated["confidence"] = calibrate_confidence(
+            validated.get("confidence"), execution_mode
+        )
 
-        if current_mode == ExecutionMode.FULL:
-            # Optimal mode: Cap at 0.9 to maintain healthy skepticism
-            validated["confidence"] = min(raw_confidence, 0.9)
+        logger.info(f"[Trace: {trace_id}] MODE: {execution_mode}")
 
-        elif current_mode == ExecutionMode.PARTIAL:
-            # Degraded mode: Cap at 0.65 to signal caution
-            validated["confidence"] = min(raw_confidence, 0.65)
-
-        else:
-            # Fallback/System failure: Fixed at 0.5 (Neutral)
-            validated["confidence"] = 0.5
-
-        # 🔹 Normalize output
-        final_output = normalize_simulation_output(validated)
-
-        # 🔹 Log output (important for debugging)
-        logger.info(f"[Trace: {trace_id}] Output: {final_output}")
-
-        return final_output, current_mode
+        return build_response(validated, execution_mode), execution_mode
 
     except Exception as e:
-        category = classify_exception(e)
-        logger.error(f"[Trace: {trace_id}] LLM failure [{category}]: {str(e)}")
+        error_type = classify_error(e)
+        logger.error(f"[Trace: {trace_id}] {error_type}: {str(e)}")
 
-        if current_mode == ExecutionMode.FULL:
-            logger.warning(f"[Trace: {trace_id}] Downgrading FULL → PARTIAL")
+        if error_type == "TRANSIENT":
+            return build_response(partial_response(), ExecutionMode.PARTIAL), ExecutionMode.PARTIAL
 
-            output = {
-                "predicted_action": "hold position",
-                "confidence": 0.6,
-                "reasoning": "Partial mode due to degraded AI",
-                "coaching_tip": "Focus on positioning"
-            }
-
-            return normalize_simulation_output(output), ExecutionMode.PARTIAL
-
-        logger.warning(f"[Trace: {trace_id}] Falling back to safe mode")
-
-        try:
-            output = {
-                "predicted_action": "hold position",
-                "confidence": 0.5,
-                "reasoning": "Fallback after system failure",
-                "coaching_tip": "Play safe"
-            }
-            return normalize_simulation_output(output), ExecutionMode.FALLBACK
-        except Exception:
-            # 🚨 EMERGENCY FALLBACK (No logic, just raw dict)
-            return {
-                "predicted_action": "hold position",
-                "confidence": 0.5,
-                "reasoning": "Critical engine failure",
-                "coaching_tip": "Restarting engine recommended"
-            }, ExecutionMode.FALLBACK
+        return build_response(fallback_response(), ExecutionMode.FALLBACK), ExecutionMode.FALLBACK
