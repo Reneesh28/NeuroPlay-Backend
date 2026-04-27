@@ -61,3 +61,15 @@ def build_error_response(
             details=details
         )
     )
+
+def normalize_simulation_output(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ensures consistent structure and safe values for simulation results.
+    Separates domain logic from orchestration.
+    """
+    return {
+        "predicted_action": str(data.get("predicted_action", "hold position")),
+        "confidence": float(max(0.0, min(data.get("confidence", 0.5), 1.0))),
+        "reasoning": str(data.get("reasoning", "No reasoning provided"))[:300],
+        "coaching_tip": str(data.get("coaching_tip", "Stay aware"))[:200]
+    }

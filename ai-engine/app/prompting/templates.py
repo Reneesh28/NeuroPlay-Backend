@@ -20,29 +20,33 @@ PLAYER CONTEXT:
 """
 
     # 🔹 MODE-SPECIFIC BEHAVIOR
-
     if mode == ExecutionMode.FULL:
         behavior = """
+### EXECUTION MODE: FULL (STRATEGIC ANALYST)
 You MUST:
-- Think strategically and deeply
-- Consider positioning, enemy movement, and risk
-- Provide optimal decision
-
+- Think strategically and deeply about the win condition.
+- Consider positioning, enemy movement patterns, and calculated risks.
+- Provide the OPTIMAL decision for high-level play.
+- Use advanced tactical reasoning.
 """
 
     elif mode == ExecutionMode.PARTIAL:
         behavior = """
+### EXECUTION MODE: PARTIAL (CONSERVATIVE ADVISOR)
 You MUST:
-- Prefer SAFE decisions
-- Avoid aggressive or risky actions
-- Keep reasoning simple and conservative
-
+- Prefer SAFE, low-risk decisions only.
+- Avoid aggressive plays or complex maneuvers.
+- Keep reasoning simple, direct, and conservative.
+- Focus on survival above all else.
 """
 
     else:
         behavior = """
+### EXECUTION MODE: FALLBACK (SAFETY PROTOCOL)
 You MUST:
-- Return safest possible action
+- Return the SAFEST possible action (e.g., hold position, retreat).
+- Minimize risk to zero.
+- No complex reasoning.
 """
 
     output_format = """
@@ -56,9 +60,9 @@ Return ONLY valid JSON:
 }
 
 Rules:
-- No extra text
-- No explanation outside JSON
-- Confidence must be between 0 and 1
+- No extra text or conversational filler.
+- No explanation outside JSON.
+- Confidence must be between 0 and 1.
 """
 
     return base + behavior + output_format
