@@ -1,6 +1,6 @@
 const axios = require("axios");
-const { VALID_EXECUTION_MODES } = require("../constants/execution.constants");
-const { assertValidStep } = require("../pipeline/step.validator");
+const { VALID_EXECUTION_MODES } = require("../core/constants/execution.constants");
+const { assertValidStep } = require("../core/pipeline/step.validator");
 
 const AI_URL = process.env.AI_SERVICE_URL;
 
