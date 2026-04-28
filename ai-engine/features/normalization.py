@@ -9,7 +9,20 @@ FEATURE_RANGES = {
     "accuracy": (0, 1),
     "headshot_rate": (0, 1),
     "movement_variance": (0, 5),
+
+    # new features (for 20D)
+    "position_change_rate": (0, 10),
+    "target_switch_rate": (0, 10),
+    "avg_engagement_distance": (0, 100),
+    "cover_usage": (0, 1),
+    "reload_frequency": (0, 10),
+    "kill_streak": (0, 20),
+    "death_rate": (0, 10),
+    "assist_rate": (0, 10),
+    "objective_time": (0, 300),
+    "damage_per_second": (0, 50),
 }
+
 
 def normalize_features(features):
     normalized = {}

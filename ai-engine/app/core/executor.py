@@ -21,10 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 def _validate_context(context: ExecutionContext):
-    """
-    Mandatory validation of execution context integrity.
-    Reject execution if any field is missing or inconsistent.
-    """
     required_fields = [
         "user_id",
         "session_id",
@@ -41,27 +37,11 @@ def _validate_context(context: ExecutionContext):
 
 
 def execute_pipeline_step(req: ExecuteRequest) -> ExecuteResponse:
-    """
-    Central execution entry point (Pure Orchestrator).
-
-    Responsibilities:
-    - Validate request + context
-    - Load input (loader)
-    - Execute processor ONCE (no retry logic)
-    - Save output (saver)
-    - Build response
-
-    Rules:
-    - Executor MUST NOT perform retries
-    - Executor MUST NOT downgrade modes
-    - Executor MUST NOT modify context
-    - Processor handles FULL → PARTIAL → FALLBACK internally
-    """
     start_time = time.time()
     trace_id = req.context.trace_id
 
     try:
-        # 1. Context & Request Validation
+        # 1. Validate context
         _validate_context(req.context)
 
         if not req.input_ref:
@@ -70,24 +50,23 @@ def execute_pipeline_step(req: ExecuteRequest) -> ExecuteResponse:
         if not req.step:
             raise PermanentError("step is required")
 
-        # 2. Deterministic Step Routing
+        # 2. Step config
         step_config = get_step_config(req.step)
 
-        # 3. Loader: Fetch input data (domain-scoped)
+        # 3. Load input
         input_data = load_input_data(
             req.input_ref,
             req.context.model_dump()
         )
 
-        # 4. Processor: SINGLE EXECUTION (NO RETRY LOGIC HERE)
-        # Processor is responsible for handling execution modes internally
+        # 4. Execute processor
         result_data, execution_mode = step_config.processor_func(
             input_data=input_data,
             context=req.context.model_dump(),
             execution_mode=ExecutionMode.FULL
         )
 
-        # 5. Saver: Persist output data (idempotent)
+        # 5. Save output
         output_ref = save_output_data(
             result_data,
             req.context.model_dump(),
@@ -97,13 +76,11 @@ def execute_pipeline_step(req: ExecuteRequest) -> ExecuteResponse:
 
         execution_time_ms = int((time.time() - start_time) * 1000)
 
-        # 6. Logging (observability)
         logger.info(
-            f"[Trace: {trace_id}] "
-            f"Step: {req.step} | Mode: {execution_mode} | Output: {output_ref}"
+            f"[Trace: {trace_id}] Step: {req.step} | Mode: {execution_mode} | Output: {output_ref}"
         )
 
-        # 7. Response Builder
+        # 6. Success response
         return build_success_response(
             output_ref=output_ref,
             next_step=step_config.next_step,
@@ -113,13 +90,11 @@ def execute_pipeline_step(req: ExecuteRequest) -> ExecuteResponse:
         )
 
     except Exception as e:
-        # Deterministic Error Classification (NO raw exceptions leak)
         classified_error = classify_error(e)
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         logger.error(
-            f"[Trace: {trace_id}] "
-            f"{classified_error.error_type}: {classified_error.message}"
+            f"[Trace: {trace_id}] {classified_error.error_type}: {classified_error.message}"
         )
 
         return build_error_response(
@@ -127,6 +102,5 @@ def execute_pipeline_step(req: ExecuteRequest) -> ExecuteResponse:
             message=classified_error.message,
             execution_mode=ExecutionMode.FALLBACK,
             execution_time_ms=execution_time_ms,
-            details=getattr(classified_error, "details", {}),
-            next_step=None  # ensure contract consistency
+            details=getattr(classified_error, "details", {})
         )
