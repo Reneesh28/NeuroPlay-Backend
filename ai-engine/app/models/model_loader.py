@@ -2,7 +2,7 @@ import os
 import logging
 import torch
 
-from models.autoencoder import Autoencoder
+from app.models.autoencoder import Autoencoder  # ✅ FIXED IMPORT
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def load_model() -> Autoencoder:
     state_dict = torch.load(model_path, map_location=torch.device("cpu"))
     model.load_state_dict(state_dict)
 
-    model.eval()  # 🔥 IMPORTANT for inference
+    model.eval()  # 🔥 REQUIRED for inference
 
     _model = model
 
@@ -52,6 +52,6 @@ def load_model() -> Autoencoder:
 
 def get_model() -> Autoencoder:
     """
-    Public accessor (safe)
+    Public accessor
     """
     return load_model()
