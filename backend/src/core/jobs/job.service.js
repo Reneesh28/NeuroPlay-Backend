@@ -26,15 +26,13 @@ async function updateJobStatus(jobId, nextStatus) {
     return job;
 }
 
-// 🔥 ATOMIC STEP UPDATE (STEP 4.2 FINAL)
+// 🔥 ATOMIC STEP UPDATE
 async function updateStepStatus(jobId, stepName, updates) {
 
-    // 🔥 Validate next_step (AI-driven)
     if (updates.next_step) {
         assertValidStep(updates.next_step);
     }
 
-    // 🔥 Build safe $set query (NO undefined writes)
     const setQuery = {};
 
     if (updates.status !== undefined)
@@ -52,7 +50,7 @@ async function updateStepStatus(jobId, stepName, updates) {
     if (updates.error !== undefined)
         setQuery["steps.$.error"] = updates.error;
 
-    // 🔥 STEP 4.2 — HEARTBEAT UPDATE (CRITICAL)
+    // 🔥 heartbeat
     setQuery.last_heartbeat = new Date();
 
     // 🔥 Job-level updates
@@ -67,45 +65,44 @@ async function updateStepStatus(jobId, stepName, updates) {
     if (updates.status === "completed") {
         setQuery.current_step = updates.next_step || null;
 
-        // 🔥 FINAL STEP → COMPLETE JOB
         if (!updates.next_step) {
             setQuery.status = "completed";
-
-            // 🔥 STEP 4 — mark finished time
             setQuery.finished_at = new Date();
         }
     }
 
-    // 🔥 Increment query
     const incQuery = {};
 
     if (updates.status === "failed") {
         incQuery["steps.$.retries"] = 1;
     }
 
-    // 🔥 Atomic update
     const job = await Job.findOneAndUpdate(
         { _id: jobId, "steps.name": stepName },
         {
             ...(Object.keys(setQuery).length > 0 && { $set: setQuery }),
             ...(Object.keys(incQuery).length > 0 && { $inc: incQuery })
         },
-        { new: true }
+        { returnDocument: "after" }
     );
 
     if (!job) {
         throw new Error(`Job not found or step mismatch: ${jobId} / ${stepName}`);
     }
 
-    // 🔥 SAFE progress calculation (derived, not stored blindly)
+    // 🔥 Progress calc
     const completedSteps = job.steps.filter(s => s.status === "completed").length;
     const totalSteps = job.steps.length;
-
     job.progress = Math.floor((completedSteps / totalSteps) * 100);
 
-    // 🔥 Final aggregation
+    // 🔥 FINAL FIX — SAFE aggregation
     if (job.status === "completed" && !job.output_ref) {
-        job.output_ref = aggregateResults(job);
+        const aggregated = aggregateResults(job);
+
+        job.output_ref =
+            typeof aggregated === "string"
+                ? aggregated
+                : JSON.stringify(aggregated);
     }
 
     await job.save();

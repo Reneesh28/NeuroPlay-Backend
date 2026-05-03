@@ -11,9 +11,9 @@ async function simulationProcessor(job, inputData) {
             job_id: job.job_id,
             step,
             input_ref: inputData,
+            input_type: "ref", // 🔥 REQUIRED
             context: job.context,
         });
-
 
         const executionTime = Date.now() - start;
 

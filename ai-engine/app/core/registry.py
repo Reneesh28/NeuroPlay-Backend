@@ -3,9 +3,9 @@ from app.processors import (
     video_processor,
     feature_processor,
     embedding_processor,
-    clustering_processor,
     simulation_processor
 )
+from app.pipeline.steps.memory_retrieval import run as memory_retrieval_run
 from app.core.errors import PermanentError
 
 
@@ -15,36 +15,39 @@ class StepConfig:
         self.next_step = next_step
 
 
-# 🔥 CENTRAL STEP REGISTRY (DETERMINISTIC ROUTING)
+# 🔥 CENTRAL STEP REGISTRY (UPDATED)
 STEP_REGISTRY: Dict[str, StepConfig] = {
     "video_processing": StepConfig(
         processor_func=video_processor.run,
         next_step="feature_extraction"
     ),
+
     "feature_extraction": StepConfig(
         processor_func=feature_processor.run,
         next_step="embedding_generation"
     ),
+
+    # 🔥 STEP 1: embedding
     "embedding_generation": StepConfig(
         processor_func=embedding_processor.run,
-        next_step="clustering"
+        next_step="memory_retrieval"
     ),
-    "clustering": StepConfig(
-        processor_func=clustering_processor.run,
+
+    # 🔥 STEP 2: memory
+    "memory_retrieval": StepConfig(
+        processor_func=memory_retrieval_run,
         next_step="simulation"
     ),
+
+    # 🔥 FINAL STEP
     "simulation": StepConfig(
         processor_func=simulation_processor.run,
-        next_step=None  # 🔥 Final step
+        next_step=None
     )
 }
 
 
 def get_step_config(step_name: str) -> StepConfig:
-    """
-    Returns the processor and next step configuration for a given step.
-    Enforces strict contract: unknown step = hard fail.
-    """
     config = STEP_REGISTRY.get(step_name)
 
     if not config:

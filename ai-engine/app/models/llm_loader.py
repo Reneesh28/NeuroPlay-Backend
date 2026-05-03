@@ -18,10 +18,15 @@ def call_llm(prompt: str, max_tokens: int = 200):
             model="meta-llama/Meta-Llama-3-8B-Instruct",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens,
-            temperature=0.4  # ✅ deterministic
+            temperature=0.3  # 🔥 slightly more stable
         )
 
-        return response.choices[0].message.content
+        output = response.choices[0].message.content
+
+        if not output:
+            return None
+
+        return output.strip()
 
     except Exception as e:
         print("LLM ERROR:", str(e))

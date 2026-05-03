@@ -2,56 +2,49 @@ import os
 import logging
 import torch
 
-from app.models.autoencoder import Autoencoder  # ✅ FIXED IMPORT
+from services.ml.v2.inference_engine import AutoEncoder  # 🔥 correct model
 
 logger = logging.getLogger(__name__)
 
-# Singleton instance
-_model = None
+_model_cache = {}
 
 
-def _get_model_path() -> str:
-    """
-    Resolve path to trained model:
-    ai-engine/models/model.pt
-    """
+def _get_model_path(domain: str) -> str:
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    return os.path.join(base_dir, "models", "model.pt")
+
+    return os.path.join(
+        base_dir,
+        "services",
+        "models",
+        "v2",
+        f"autoencoder_{domain}.pt"
+    )
 
 
-def load_model() -> Autoencoder:
-    """
-    Load model once (singleton)
-    """
-    global _model
+def load_model(domain: str):
+    if domain in _model_cache:
+        return _model_cache[domain]
 
-    if _model is not None:
-        return _model
-
-    model_path = _get_model_path()
+    model_path = _get_model_path(domain)
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found at: {model_path}")
 
-    logger.info("🔄 Loading Autoencoder model...")
+    logger.info(f"🔄 Loading model for domain: {domain}")
 
-    model = Autoencoder()
+    model = AutoEncoder(input_dim=20, latent_dim=8)
 
-    # Load weights (CPU-safe)
     state_dict = torch.load(model_path, map_location=torch.device("cpu"))
     model.load_state_dict(state_dict)
 
-    model.eval()  # 🔥 REQUIRED for inference
+    model.eval()
 
-    _model = model
+    _model_cache[domain] = model
 
     logger.info("✅ Model loaded successfully")
 
-    return _model
+    return model
 
 
-def get_model() -> Autoencoder:
-    """
-    Public accessor
-    """
-    return load_model()
+def get_model(domain: str):
+    return load_model(domain)

@@ -1,6 +1,6 @@
 const { PIPELINE_STEPS } = require("./step.constants");
 
-// 🔥 Ordered execution
+// 🔥 Ordered deterministic execution
 const PIPELINE_ORDER = [...PIPELINE_STEPS];
 
 module.exports = {

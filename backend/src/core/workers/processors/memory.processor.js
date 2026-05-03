@@ -1,8 +1,8 @@
 const aiService = require("../../../integrations/ai.service");
 const { formatStepOutput, formatErrorOutput } = require("../../pipeline/output.formatter");
 
-async function embeddingProcessor(job, inputData) {
-    const step = "embedding_generation";
+async function memoryProcessor(job, inputData) {
+    const step = "memory_retrieval";
 
     try {
         const start = Date.now();
@@ -31,4 +31,4 @@ async function embeddingProcessor(job, inputData) {
     }
 }
 
-module.exports = embeddingProcessor;
+module.exports = memoryProcessor;

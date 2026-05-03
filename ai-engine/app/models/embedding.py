@@ -4,9 +4,9 @@ from typing import List
 from app.models.model_loader import get_model
 
 
-def generate_embedding(ml_input: List[float]) -> List[float]:
+def generate_embedding(ml_input: List[float], domain: str = "blackops") -> List[float]:
     """
-    Convert 20D ml_input → 8D embedding
+    Convert 20D → 8D embedding
     """
 
     if not isinstance(ml_input, list):
@@ -15,12 +15,12 @@ def generate_embedding(ml_input: List[float]) -> List[float]:
     if len(ml_input) != 20:
         raise ValueError(f"Expected 20D input, got {len(ml_input)}")
 
-    # Convert to tensor
     x = torch.tensor(ml_input, dtype=torch.float32).unsqueeze(0)
 
-    model = get_model()
+    # 🔥 FIX 3 → pass domain
+    model = get_model(domain)
 
     with torch.no_grad():
-        embedding = model.encode(x)
+        embedding = model.encoder(x)
 
     return embedding.squeeze(0).tolist()

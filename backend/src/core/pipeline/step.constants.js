@@ -2,7 +2,7 @@ const PIPELINE_STEPS = [
     "video_processing",
     "feature_extraction",
     "embedding_generation",
-    "clustering",
+    "memory_retrieval",   // 🔥 NEW STEP
     "simulation"
 ];
 

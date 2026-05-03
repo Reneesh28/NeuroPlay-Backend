@@ -50,7 +50,7 @@ NO extra text.
 
 STRICT RULE:
 If output is not valid JSON, the response is invalid.
-
+ALWAYS return valid JSON. If unsure, return safe fallback values.
 FORMAT:
 
 {

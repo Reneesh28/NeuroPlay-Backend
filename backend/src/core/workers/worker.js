@@ -2,14 +2,10 @@ const { Worker } = require("bullmq");
 const connection = require("../../config/redis");
 const { executeJobStep } = require("./worker.executor");
 
-/**
- * 🔥 NEUROPLAY WORKER CLUSTER (FINAL)
- */
-
 const QUEUE_NAMES = [
     "ingestion-queue",
     "processing-queue",
-    "embedding-queue",
+    "embedding-queue", // 🔥 covers embedding + memory
     "simulation-queue"
 ];
 
@@ -25,7 +21,7 @@ const workers = QUEUE_NAMES.map(queueName => {
                 await executeJobStep(job.data);
             } catch (err) {
                 console.error(`❌ Worker Error [${queueName}] Job ${job?.id}:`, err.message);
-                throw err; // Let BullMQ retry/fail
+                throw err;
             }
         },
         {
@@ -47,7 +43,7 @@ const workers = QUEUE_NAMES.map(queueName => {
     return worker;
 });
 
-// 🔥 Graceful shutdown (important for production)
+// Graceful shutdown
 async function shutdown() {
     console.log("🛑 Shutting down workers...");
     await Promise.all(workers.map(w => w.close()));
@@ -56,5 +52,3 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-// entry file → no exports

@@ -10,8 +10,8 @@ const StepSchema = new mongoose.Schema(
             default: "pending"
         },
 
-        input_ref: { type: Object },
-        output_ref: { type: Object },
+        input_ref: { type: String },
+        output_ref: { type: String },
 
         execution_mode: {
             type: String,
@@ -58,8 +58,8 @@ const JobSchema = new mongoose.Schema(
 
         steps: [StepSchema],
 
-        input_ref: { type: Object },
-        output_ref: { type: Object },
+        input_ref: { type: String },
+        output_ref: { type: String },
 
         execution_mode: {
             type: String,

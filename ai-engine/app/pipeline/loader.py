@@ -7,6 +7,14 @@ logger = logging.getLogger(__name__)
 
 
 def load_input_data(input_ref: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    if input_ref == "test_inline_1":
+        return {
+            "ml_input": [0.1] * 20
+        }
+    if input_ref == "test_inline_2":
+        return {
+            "embedding": [0.1] * 8
+        }
     domain = context.get("domain")
     trace_id = context.get("trace_id")
 

@@ -67,16 +67,20 @@ class AutoEncoder(nn.Module):
 # ==============================
 class InferenceEngine:
     def __init__(self, domain):
+        domain = domain.lower() if domain else "blackops"
         self.domain = domain
 
-        print(f"⚡ Initializing engine for: {domain}")
+        print(f"Initializing engine for: {domain}")
 
         self.model = self._load_model()
         self.index = self._load_faiss()
         self.clusters = self._load_clusters()
         self.scaler = self._load_scaler()
-        self.mapping = self._load_mapping()  # 🔥 NEW
+        self.mapping = self._load_mapping()
 
+    # ==============================
+    # LOADERS
+    # ==============================
     def _load_model(self):
         path = os.path.join(MODEL_DIR, f"autoencoder_{self.domain}.pt")
         model = AutoEncoder().to(DEVICE)
@@ -114,10 +118,51 @@ class InferenceEngine:
             "_id": {"$in": object_ids}
         }))
 
-        # preserve order
         doc_map = {str(doc["_id"]): doc for doc in docs}
 
         return [doc_map.get(sid) for sid in segment_ids]
+
+    # ==============================
+    # 🔥 NEW: SEARCH BY EMBEDDING
+    # ==============================
+    def search_by_embedding(self, embedding):
+        embedding = np.array(embedding, dtype=np.float32).reshape(1, -1)
+
+        # Validate dimension
+        if embedding.shape[1] != self.index.d:
+            raise ValueError(
+                f"Embedding dim mismatch: expected {self.index.d}, got {embedding.shape[1]}"
+            )
+
+        distances, indices = self.index.search(embedding, 5)
+
+        indices = indices[0]
+        distances = distances[0]
+
+        # Map indices → segment IDs
+        segment_ids = [str(self.mapping[i]) for i in indices]
+
+        # Fetch Mongo documents
+        segments = self.fetch_segments(segment_ids)
+
+        results = []
+
+        for i, seg in enumerate(segments):
+            if seg is None:
+                continue
+
+            idx = indices[i]
+
+            results.append({
+                "segment_id": segment_ids[i],
+                "cluster_id": int(self.clusters["labels"][idx]),
+                "confidence": float(self.clusters["confidence"][idx]),
+                "distance": float(distances[i]),
+                "player_state": seg.get("input_data", {}).get("player_state", {}),
+                "events": seg.get("input_data", {}).get("events", [])
+            })
+
+        return results
 
     # ==============================
     # FEATURE BUILDER
@@ -161,31 +206,23 @@ class InferenceEngine:
         return np.array(features[:20], dtype=np.float32)
 
     # ==============================
-    # INFERENCE
+    # ORIGINAL INFERENCE (UNCHANGED)
     # ==============================
     def infer(self, player_state, prev_state=None):
-        # Feature
         features = self.build_feature_vector(player_state, prev_state)
-
-        # Scale
         features = self.scaler.transform([features])[0].astype(np.float32)
 
-        # Embedding
         tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0).to(DEVICE)
 
         with torch.no_grad():
             embedding = self.model.encode(tensor).cpu().numpy()
 
-        # FAISS search
         distances, indices = self.index.search(embedding.astype("float32"), 5)
 
         indices = indices[0]
         distances = distances[0]
 
-        # 🔥 Map indices → segment_ids
         segment_ids = [str(self.mapping[i]) for i in indices]
-
-        # 🔥 Fetch Mongo docs
         segments = self.fetch_segments(segment_ids)
 
         results = []
@@ -209,30 +246,3 @@ class InferenceEngine:
             "embedding": embedding.tolist(),
             "similar_segments": results
         }
-
-
-# ==============================
-# TEST
-# ==============================
-if __name__ == "__main__":
-    domains = ["blackops", "modern_warfare"]
-
-    sample = {
-        "motion_intensity": 0.06,
-        "motion_variance": 0.002,
-        "brightness_avg": 0.15,
-        "flash_count": 0,
-        "edge_density_avg": 0.01,
-        "entropy_avg": 0.63
-    }
-
-    for d in domains:
-        print(f"\n==============================")
-        print(f"🚀 Testing domain: {d}")
-
-        engine = InferenceEngine(d)
-        result = engine.infer(sample)
-
-        print("\n🧠 RESULT:")
-        for k, v in result.items():
-            print(k, ":", v)

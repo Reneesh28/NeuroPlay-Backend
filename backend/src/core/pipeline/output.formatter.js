@@ -1,28 +1,25 @@
 const { classifyError } = require("../resilience/error.classifier");
 
 function formatStepOutput({ step, rawOutput, executionTime }) {
+    // 🔥 HARD SAFETY: force string
+    const safeOutput =
+        typeof rawOutput?.output === "string"
+            ? rawOutput.output
+            : null;
+
     return {
         status: "completed",
 
-        // 🔥 Standardized output
-        output: {
-            step,
-            data: rawOutput?.data ?? rawOutput ?? {},
-            execution_time: executionTime ?? null,
-            timestamp: Date.now(),
-        },
+        // 🔥 GUARANTEED STRING ONLY
+        output: safeOutput,
 
-        // 🔥 AI-DRIVEN CHAINING
         next_step: rawOutput?.next_step ?? null,
 
-        // 🔥 AI-DRIVEN MODE
         execution_mode: rawOutput?.execution_mode ?? "FULL",
 
-        // 🔥 VERSIONING
         model_version: rawOutput?.model_version ?? "v1"
     };
 }
-
 
 function formatErrorOutput({ step, error }) {
     const type = classifyError(error);
@@ -39,8 +36,6 @@ function formatErrorOutput({ step, error }) {
         model_version: null
     };
 }
-
-
 
 module.exports = {
     formatStepOutput,

@@ -7,14 +7,13 @@ async function ingestionProcessor(job, inputData) {
     try {
         const start = Date.now();
 
-        // 🔥 Call AI service (Strict Contract)
         const response = await aiService.execute({
             job_id: job.job_id,
             step,
-            input_ref: inputData, // Always a reference
-            context: job.context,  // Propagate full context
+            input_ref: inputData,
+            input_type: "ref", // 🔥 REQUIRED
+            context: job.context,
         });
-
 
         const executionTime = Date.now() - start;
 

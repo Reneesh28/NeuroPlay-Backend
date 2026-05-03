@@ -1,8 +1,7 @@
 const queues = require("./queues");
 
 /**
- * 🔥 Queue Router
- * Maps pipeline steps to their dedicated distributed queues
+ * 🔥 Queue Router (FIXED)
  */
 function getQueueForStep(step) {
     switch (step) {
@@ -13,15 +12,14 @@ function getQueueForStep(step) {
             return queues.processingQueue;
 
         case "embedding_generation":
-        case "clustering":
+        case "memory_retrieval": // 🔥 FIXED
             return queues.embeddingQueue;
 
         case "simulation":
             return queues.simulationQueue;
 
-
         default:
-            console.warn(`⚠️ No specific queue for step: ${step}, falling back to default`);
+            console.warn(`⚠️ No specific queue for step: ${step}, fallback`);
             return queues.defaultQueue;
     }
 }
