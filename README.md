@@ -22,13 +22,14 @@ Client Request
   Job Status / Results
 ```
 
-### Core Services
+### 📚 Core Services Documentation
 
-| Service | Runtime | Responsibility |
+For detailed service-specific documentation, please refer to their respective README files:
+
+| Service | Runtime | Documentation |
 | :--- | :--- | :--- |
-| **Backend API** | Node.js / Express | Job creation, status polling, file uploads |
-| **Job Worker** | Node.js / BullMQ | Consumes queue jobs, drives the 5-step pipeline |
-| **AI Engine** | Python / FastAPI | Executes individual AI processing steps |
+| **Backend API & Worker** | Node.js / Express / BullMQ | 📖 [Backend README](./backend/README.md) |
+| **AI Engine & ML Pipeline** | Python / FastAPI / PyTorch | 📖 [AI Engine README](./ai-engine/README.md) |
 
 ---
 
@@ -38,12 +39,12 @@ Client Request
 | :--- | :--- |
 | API Framework | [Express v5](https://expressjs.com/) (Node.js) |
 | AI Service | [FastAPI](https://fastapi.tiangolo.com/) (Python 3.9+) |
+| Machine Learning | PyTorch, FAISS, HDBSCAN, Scikit-learn |
 | Job Queue | [BullMQ](https://docs.bullmq.io/) |
 | Queue Broker | [Redis](https://redis.io/) via `ioredis` |
 | Database | [MongoDB](https://www.mongodb.com/) via Mongoose |
 | File Uploads | [Multer](https://github.com/expressjs/multer) |
 | Inter-service | [Axios](https://axios-http.com/) |
-| Dev Server | Nodemon |
 
 ---
 
@@ -54,38 +55,16 @@ Every simulation job is processed through a sequential, stateful pipeline. Each 
 | Step | Name | Description |
 | :---: | :--- | :--- |
 | 1 | `video_processing` | AI-driven ingestion and analysis of raw video inputs |
-| 2 | `feature_extraction` | Extracting meaningful data points from processed video |
-| 3 | `embedding_generation` | Converting features into multi-dimensional vectors |
-| 4 | `clustering` | Grouping related features and behavioral patterns |
-| 5 | `simulation` | Final simulation computation from aggregated data |
+| 2 | `feature_extraction` | Extracting meaningful data points (motion, brightness, entropy) |
+| 3 | `embedding_generation` | Converting features into 8-dimensional dense vectors (AutoEncoder) |
+| 4 | `clustering` | Grouping behavioral patterns via HDBSCAN clustering |
+| 5 | `simulation` | FAISS similarity search against historical vectors for outcome prediction |
 
-On completion, results are aggregated by `result.aggregator.js` and stored in `job.output_ref`.
-
----
-
-## 🔗 API Endpoints
-
-### 🟢 Backend API (Node.js · `PORT=5000`)
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/health` | Service health check |
-| `GET` | `/api` | API discovery root |
-| `POST` | `/api/upload` | Upload a file for processing (multipart/form-data) |
-| `POST` | `/api/job` | Create a new simulation pipeline job |
-| `GET` | `/api/job/:id` | Retrieve status, progress & results of a job |
-| `POST` | `/api/test/process/:jobId` | Directly trigger processing for a job ID (dev/testing) |
-
-### 🔵 AI Engine (Python · `PORT=8000`)
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/health` | Service health check |
-| `POST` | `/ai/execute` | Execute a specific AI pipeline step for a given job |
+> **Note on V2 Models:** The AI Engine is currently running V2 models capable of dynamically categorizing standard gameplay, high-action combat (high motion/flashes), and non-gameplay states (menus/loading screens) purely through unsupervised clustering. See the [AI Engine README](./ai-engine/README.md) for more details.
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start Guide
 
 ### 1. Prerequisites
 
@@ -95,6 +74,8 @@ On completion, results are aggregated by `result.aggregator.js` and stored in `j
 - **Redis** server running (local or Docker)
 
 ### 2. Environment Configuration
+
+Ensure both services have their `.env` files configured.
 
 **Backend (`/backend/.env`):**
 ```env
@@ -107,41 +88,33 @@ REDIS_PORT=6379
 **AI Engine (`/ai-engine/.env`):**
 ```env
 PORT=8000
+MONGO_URI=mongodb://127.0.0.1:27017/neuroplay
+DB_NAME=neuroplay
 ```
 
-### 3. Run the Backend
+### 3. Running the Stack
 
+To run the full end-to-end pipeline, you need **three** terminal windows:
+
+**Terminal 1: Node.js Express API**
 ```bash
-# Navigate to the backend service
-cd core-backend/backend
-
-# Install dependencies
+cd backend
 npm install
-
-# Start the API server (with hot-reload)
 npm run dev
+```
 
-# In a separate terminal — start the background worker
+**Terminal 2: Node.js BullMQ Worker**
+```bash
+cd backend
 node worker.js
 ```
 
-> ⚠️ The API server and the worker process are **separate processes** and must both be running for end-to-end job execution to work.
-
-### 4. Run the AI Engine
-
+**Terminal 3: Python FastAPI AI Engine**
 ```bash
-# Navigate to the AI engine service
-cd core-backend/ai-engine
-
-# Create and activate the virtual environment
+cd ai-engine
 python -m venv venv
-venv/Scripts/activate        # Windows
-# source venv/bin/activate   # macOS / Linux
-
-# Install dependencies
+venv\Scripts\activate   # Windows (use `source venv/bin/activate` for Mac/Linux)
 pip install -r requirements.txt
-
-# Start the FastAPI service
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -151,85 +124,31 @@ uvicorn app.main:app --reload --port 8000
 
 ```text
 core-backend/
-├── .gitignore
-├── README.md
+├── README.md                       # This file
+├── backend/                        # Node.js API & BullMQ Worker
+│   ├── README.md                   # Backend specific documentation
+│   ├── server.js                   # Express server entry
+│   ├── worker.js                   # BullMQ consumer entry
+│   └── src/                        # Core backend logic
 │
-├── backend/                        # Node.js / Express Service
-│   ├── server.js                   # HTTP server entry point
-│   ├── worker.js                   # BullMQ worker entry point (run separately)
-│   ├── package.json
-│   └── src/
-│       ├── app.js                  # Express app setup & route registration
-│       ├── config/
-│       │   └── redis.js            # ioredis connection (maxRetriesPerRequest: null)
-│       ├── core/
-│       │   ├── config/             # Shared core configs
-│       │   ├── database/           # Mongoose connection
-│       │   ├── jobs/
-│       │   │   ├── job.model.js    # Mongoose Job schema
-│       │   │   └── job.service.js  # Job CRUD helpers
-│       │   ├── middleware/         # Error handling middleware
-│       │   ├── pipeline/
-│       │   │   ├── step.constants.js
-│       │   │   ├── step.registry.js
-│       │   │   ├── pipeline.config.js
-│       │   │   ├── input.processor.js
-│       │   │   ├── output.formatter.js
-│       │   │   └── result.aggregator.js
-│       │   ├── queue/
-│       │   │   ├── job.queue.js    # BullMQ Queue definition
-│       │   │   ├── job.worker.js   # BullMQ Worker definition
-│       │   │   ├── producer.js     # Job enqueue helper
-│       │   │   ├── queue.config.js
-│       │   │   └── queues.js
-│       │   └── workers/
-│       │       ├── worker.js       # processJob() — drives the 5-step loop
-│       │       └── processors/     # One file per pipeline step
-│       │           ├── ingestion.processor.js
-│       │           ├── feature.processor.js
-│       │           ├── embedding.processor.js
-│       │           ├── clustering.processor.js
-│       │           └── simulation.processor.js
-│       ├── integrations/           # Axios clients for AI Engine
-│       ├── modules/
-│       │   ├── index.js            # Module router
-│       │   ├── job/                # Job status API (routes + controller)
-│       │   ├── upload/             # Multer file upload (routes + controller + service)
-│       │   ├── coach/              # Coaching module
-│       │   ├── dashboard/          # Dashboard module
-│       │   ├── profile/            # User profile module
-│       │   └── simulation/         # Simulation module
-│       └── utils/                  # Shared utility functions
-│
-├── ai-engine/                      # Python / FastAPI Service
-│   ├── .env
-│   └── app/
-│       ├── main.py                 # FastAPI app entry
-│       ├── api/                    # Route definitions
-│       ├── core/                   # Config / settings
-│       ├── processors/             # AI step logic (Python)
-│       └── schemas/                # Pydantic models
+├── ai-engine/                      # Python AI Processing Service
+│   ├── README.md                   # AI Engine specific documentation
+│   ├── app/                        # FastAPI server
+│   ├── services/                   # FAISS, Models, and NumPy data
+│   └── features/                   # ML Feature extraction logic
 │
 ├── infrastructure/                 # Deployment configs (Docker, CI/CD)
 ├── shared/                         # Common schemas across services
-├── scripts/                        # Utility scripts
-└── tests/                          # Integration / E2E tests
+└── scripts/                        # Utility scripts
 ```
 
 ---
 
 ## 🐛 Troubleshooting
 
-### `BullMQ: maxRetriesPerRequest must be null`
-BullMQ requires the Redis connection used for workers to have `maxRetriesPerRequest: null`. This is already set in `src/config/redis.js`. If you are creating additional Redis connections elsewhere, ensure the same option is applied.
-
-### Worker fails with `Operation buffering timed out`
-This means the worker process started before MongoDB established a connection. Ensure `MONGO_URI` in `.env` is correct and MongoDB is reachable before starting the worker. The database connection is initialized lazily on the first model call.
-
-### Port conflicts
-Ensure nothing else is running on port `5000` (API) or `8000` (AI Engine). Change the `PORT` variable in the respective `.env` files if needed.
-
----
+* **Worker fails with `Operation buffering timed out`**: Ensure MongoDB is reachable before starting the worker.
+* **`BullMQ: maxRetriesPerRequest must be null`**: Check your Redis config to ensure retries are null (handled automatically in `backend/src/config/redis.js`).
+* **Jobs stuck in waiting**: Ensure the `node worker.js` process is actively running.
 
 ## 📝 License
 

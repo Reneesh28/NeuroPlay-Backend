@@ -20,8 +20,9 @@ const executeJobStep = async (payload) => {
     validateWorkerPayload(payload);
 
     const { job_id, step, input_ref, context } = payload;
+    const trace_id = context?.trace_id || "unknown";
 
-    console.log(`[JOB:START] [${step}] [${job_id}]`);
+    console.log(`[Trace:${trace_id}] [JOB:START] [${step}] [${job_id}]`);
 
     const processor = stepRegistry[step];
     if (!processor) throw new Error(`Processor not found for step: ${step}`);
@@ -37,6 +38,15 @@ const executeJobStep = async (payload) => {
 
         job.current_step = step;
         await job.save();
+    }
+
+    const stepRecord = job.steps.find(s => s.name === step);
+    if (!stepRecord) throw new Error(`Step ${step} missing in Job ${job_id}`);
+
+    // 🔥 IDEMPOTENCY GUARD: Prevent duplicate execution and writes
+    if (stepRecord.status === "completed") {
+        console.log(`[Trace:${trace_id}] [IDEMPOTENCY] Job:${job_id} Step:${step} already completed. Preventing duplicate execution.`);
+        return;
     }
 
     let execution_mode = job.execution_mode || EXECUTION_MODES.FULL;
@@ -107,13 +117,13 @@ const executeJobStep = async (payload) => {
                 output_ref // 🔥 correct chaining
             );
         } else {
-            console.log(`✅ PIPELINE COMPLETE | Job:${job_id}`);
+            console.log(`[Trace:${trace_id}] ✅ PIPELINE COMPLETE | Job:${job_id}`);
         }
 
     } catch (error) {
         const errorType = classifyError(error);
 
-        console.error(`[JOB:ERROR] [${step}] [${job_id}]`, {
+        console.error(`[Trace:${trace_id}] [JOB:ERROR] [${step}] [${job_id}]`, {
             message: error.message,
             type: errorType
         });
@@ -124,8 +134,10 @@ const executeJobStep = async (payload) => {
             error: { message: error.message, type: errorType }
         });
 
-        if (shouldRetry(errorType)) {
-            throw error;
+        // 🔥 RETRY LOGIC (safe backoff evaluation)
+        if (shouldRetry(errorType, stepRecord.retries, execution_mode)) {
+            console.log(`[Trace:${trace_id}] [RETRY] Job:${job_id} Step:${step} | Attempt: ${stepRecord.retries + 1}`);
+            throw error; // BullMQ natively handles the delay/retry mechanic based on thrown errors
         }
 
         await handleDeadJob(job, step, error);

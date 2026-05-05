@@ -11,6 +11,11 @@ const buildJob = ({ context, input_ref }) => {
         throw new Error("input_ref is required to build job");
     }
 
+    // 🔥 TRACEABILITY: Auto-generate trace_id if missing
+    if (!context.trace_id) {
+        context.trace_id = `trc_${uuidv4().replace(/-/g, "")}`;
+    }
+
     return {
         job_id: uuidv4(),
 

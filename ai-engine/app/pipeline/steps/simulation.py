@@ -1,13 +1,12 @@
 import logging
 import json
 
-from app.core.execution_mode import ExecutionMode
+from app.core.execution_mode import ExecutionMode, detect_ml_failure
 from app.models.llm_loader import call_llm
 from app.prompting.templates import build_simulation_prompt
 from app.utils.output_parser import parse_llm_output
 from app.pipeline.validators.simulation_output import validate_simulation_output
 from app.core.response_builder import build_response
-from app.core.error_classifier import classify_error
 
 logger = logging.getLogger(__name__)
 
@@ -106,11 +105,11 @@ def run(input_data: dict, context: dict, execution_mode: str) -> tuple:
         return build_response(validated, execution_mode), execution_mode
 
     except Exception as e:
-        error_type = classify_error(e)
+        failure_mode = detect_ml_failure(e)
 
-        logger.error(f"[Trace:{trace_id}] ERROR [{error_type}]: {str(e)}")
+        logger.error(f"[Trace:{trace_id}] ERROR: {str(e)} -> Triggering {failure_mode}")
 
-        if error_type == "TRANSIENT":
+        if failure_mode == ExecutionMode.PARTIAL:
             return build_response(partial_response(), ExecutionMode.PARTIAL), ExecutionMode.PARTIAL
 
         return build_response(fallback_response(), ExecutionMode.FALLBACK), ExecutionMode.FALLBACK

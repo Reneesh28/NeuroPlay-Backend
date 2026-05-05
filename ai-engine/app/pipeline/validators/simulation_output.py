@@ -35,10 +35,16 @@ def validate_simulation_output(raw: Dict[str, Any]) -> Dict[str, Any]:
     reasoning = raw.get("reasoning", "No reasoning provided")
     if not isinstance(reasoning, str):
         reasoning = str(reasoning)
+    # 🔒 Limit reasoning length to 500 chars to avoid payload bloat
+    if len(reasoning) > 500:
+        reasoning = reasoning[:497] + "..."
 
     coaching = raw.get("coaching_tip", "Stay aware")
     if not isinstance(coaching, str):
         coaching = str(coaching)
+    # 🔒 Limit coaching_tip length to 200 chars
+    if len(coaching) > 200:
+        coaching = coaching[:197] + "..."
 
     return {
         "predicted_action": action,

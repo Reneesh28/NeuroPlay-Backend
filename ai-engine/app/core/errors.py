@@ -51,12 +51,17 @@ def classify_error(e: Exception) -> AIEngineException:
     if isinstance(e, AIEngineException):
         return e
     
+    msg = str(e).lower()
+
+    if any(k in msg for k in ["timeout", "connection", "rate", "network"]):
+        return TransientError(f"Transient Issue: {str(e)}")
+        
+    if any(k in msg for k in ["json", "parse", "empty", "schema", "llm", "generation"]):
+        return MLError(f"ML Processing Failure: {str(e)}")
+    
     if isinstance(e, (ValueError, TypeError, KeyError)):
         return PermanentError(f"Data/Contract Violation: {str(e)}")
         
-    if isinstance(e, (ConnectionError, TimeoutError)):
-        return TransientError(f"Downstream Connection Issue: {str(e)}")
-        
     # Catch-all for unhandled system crashes
     logger.critical(f"UNCLASSIFIED ERROR CAUGHT: {type(e).__name__}: {str(e)}")
-    return SystemError(f"Unhandled Internal System Error: {str(e)}")
+    return PermanentError(f"Unhandled Internal Error: {str(e)}")

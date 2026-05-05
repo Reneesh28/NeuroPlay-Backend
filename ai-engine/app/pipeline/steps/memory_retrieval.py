@@ -6,6 +6,20 @@ from services.ml.v2.inference_engine import InferenceEngine
 
 logger = logging.getLogger(__name__)
 
+# 🔥 QUALITY GUARDS
+MAX_DISTANCE_THRESHOLD = 5.0
+
+def rank_and_filter(results):
+    filtered = []
+    for r in results:
+        dist = r.get("distance", float("inf"))
+        if dist <= MAX_DISTANCE_THRESHOLD:
+            filtered.append(r)
+            
+    # Rank by distance (lower is better)
+    return sorted(filtered, key=lambda x: x.get("distance", 0))
+
+
 
 def run(input_data: Dict[str, Any], context: Dict[str, Any], execution_mode: str):
     trace_id = context.get("trace_id", "unknown")
@@ -23,13 +37,24 @@ def run(input_data: Dict[str, Any], context: Dict[str, Any], execution_mode: str
         # 🔥 Initialize engine
         engine = InferenceEngine(domain)
 
-        # 🔥 Use proper search method
-        results = engine.search_by_embedding(embedding)
+        raw_results = engine.search_by_embedding(embedding)
+
+        # 🔥 Apply Quality Guards
+        valid_memory = rank_and_filter(raw_results)
+
+        mode = ExecutionMode.FULL
+        if not valid_memory:
+            logger.warning(f"[Trace: {trace_id}] No memory passed quality threshold. Downgrading to PARTIAL.")
+            mode = ExecutionMode.PARTIAL
 
         return {
-            "memory": results,
-            "embedding": embedding
-        }, ExecutionMode.FULL
+            "memory": valid_memory,
+            "embedding": embedding,
+            "metadata": {
+                "raw_count": len(raw_results),
+                "filtered_count": len(valid_memory)
+            }
+        }, mode
 
     except Exception as e:
         logger.exception(f"[Trace: {trace_id}] Memory retrieval failed: {str(e)}")

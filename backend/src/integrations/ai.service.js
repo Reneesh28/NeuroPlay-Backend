@@ -1,6 +1,7 @@
 const axios = require("axios");
 const { VALID_EXECUTION_MODES } = require("../core/constants/execution.constants");
 const { assertValidStep } = require("../core/pipeline/step.validator");
+const { aiCircuitBreaker } = require("../core/resilience/circuit.breaker");
 
 const AI_BASE_URL = process.env.AI_SERVICE_URL;
 
@@ -99,13 +100,13 @@ async function execute(payload) {
     );
 
     try {
-        const response = await axios.post(
-            `${AI_BASE_URL}${endpoint}`,
-            {
-                ...payload,
-                context // 🔥 send normalized context
-            },
-            { timeout: 30000 }
+        const response = await aiCircuitBreaker.fire(
+            () => axios.post(
+                `${AI_BASE_URL}${endpoint}`,
+                { ...payload, context },
+                { timeout: 15000 } // 🔥 Reduced from 30s to 15s for faster failover
+            ),
+            () => { throw new Error("CIRCUIT_BREAKER_OPEN"); }
         );
 
         console.log("🔥 AI RAW RESPONSE:", response.data); // debug

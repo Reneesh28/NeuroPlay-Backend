@@ -11,37 +11,15 @@ class ExecutionMode:
     PARTIAL = "PARTIAL"
     FALLBACK = "FALLBACK"
 
-def run_with_fallback(
-    processor_func: Callable,
-    input_data: Dict[str, Any],
-    context: Dict[str, Any]
-) -> Tuple[Dict[str, Any], str]:
+def detect_ml_failure(error: Exception) -> str:
     """
-    Calls processor ONCE.
-    Processor handles internal downgrade.
+    Detects if the failure should degrade to PARTIAL or completely FALLBACK.
     """
-
-    trace_id = context.get("trace_id", "unknown")
-
-    try:
-        result, actual_mode = processor_func(
-            input_data,
-            context,
-            ExecutionMode.FULL
-        )
-
-        if actual_mode != ExecutionMode.FULL:
-            logger.warning(f"[Trace: {trace_id}] Downgraded → {actual_mode}")
-
-        return result, actual_mode
-
-    except Exception as e:
-        logger.critical(f"[Trace: {trace_id}] CATASTROPHIC FAILURE: {str(e)}")
-        logger.error(traceback.format_exc())
-
-        return {
-            "output": {},
-            "status": "fallback",
-            "confidence": 0.0,
-            "reason": "critical_failure"
-        }, ExecutionMode.FALLBACK
+    msg = str(error).lower()
+    
+    # ML Degradation (e.g., poor parse, missing data, timeouts) -> PARTIAL
+    if any(k in msg for k in ["timeout", "json", "parse", "empty", "schema", "degraded", "llm"]):
+        return ExecutionMode.PARTIAL
+        
+    # Catastrophic failure -> FALLBACK
+    return ExecutionMode.FALLBACK
