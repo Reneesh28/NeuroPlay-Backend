@@ -1,35 +1,52 @@
+"""
+Simulation Processor — Phase 7: Digital Twin Reasoning Layer
+
+This processor is registered in the step registry and delegates
+execution to the Phase 7 simulation step (pipeline/steps/simulation.py).
+
+It handles the execution mode cascade:
+  FULL → PARTIAL → FALLBACK
+
+The actual intelligence (context building, LLM call, parsing)
+lives in app.pipeline.steps.simulation.run().
+"""
+
 import logging
 from app.core.execution_mode import ExecutionMode
-from app.core.errors import MLError, PartialExecutionTrigger
+from app.pipeline.steps.simulation import run as simulation_run
 
 logger = logging.getLogger(__name__)
 
 
 def run(input_data: dict, context: dict, execution_mode: str) -> tuple:
+    """
+    Entry point for the simulation processor.
+
+    Delegates directly to the Phase 7 simulation step which handles:
+    - Context building
+    - Prompt generation
+    - LLM execution with retries
+    - Output parsing and validation
+    - Confidence calibration
+    - Mode-based fallback cascade
+
+    Args:
+        input_data:      Raw pipeline input
+        context:         Execution context dict
+        execution_mode:  Current execution mode (FULL / PARTIAL / FALLBACK)
+
+    Returns:
+        Tuple of (result_dict, execution_mode_str)
+    """
     trace_id = context.get("trace_id", "unknown")
 
-    current_mode = execution_mode
+    logger.info(
+        f"[Trace:{trace_id}] Simulation processor invoked | "
+        f"Mode: {execution_mode}"
+    )
 
-    if current_mode == ExecutionMode.FULL:
-        try:
-            logger.info(f"[Trace: {trace_id}] Simulation FULL")
-            return {"result": "high_fidelity_simulation_complete"}, ExecutionMode.FULL
-
-        except (MLError, PartialExecutionTrigger):
-            current_mode = ExecutionMode.PARTIAL
-
-    if current_mode == ExecutionMode.PARTIAL:
-        try:
-            logger.info(f"[Trace: {trace_id}] Simulation PARTIAL")
-            return {"result": "low_fidelity_simulation_complete", "partial": True}, ExecutionMode.PARTIAL
-
-        except Exception:
-            current_mode = ExecutionMode.FALLBACK
-
-    logger.info(f"[Trace: {trace_id}] Simulation FALLBACK")
-
-    return {
-        "result": "heuristic_simulation_complete",
-        "fallback": True,
-        "confidence": 0.0
-    }, ExecutionMode.FALLBACK
+    return simulation_run(
+        input_data=input_data,
+        context=context,
+        execution_mode=execution_mode
+    )
