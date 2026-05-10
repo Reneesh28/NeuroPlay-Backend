@@ -1,9 +1,15 @@
 """
-Context Builder — Phase 7: Digital Twin Reasoning Layer
+Context Builder — Phase 8: Persistent Digital Twin
 
-Aggregates current game state, memory retrieval results, and cluster
-patterns into a structured reasoning context that the LLM can consume
-deterministically.
+Aggregates current game state, memory retrieval results, cluster
+patterns, player profile identity, behavioral trends, and coaching
+insights into a structured reasoning context.
+
+Phase 8 Additions:
+- Player identity injection (profile data)
+- Weighted memory (composite scoring)
+- Behavioral trends
+- Coaching integration
 
 IMPORTANT:
 - This module does NOT call the LLM.
@@ -134,15 +140,21 @@ def _extract_patterns(memory_summary: list) -> dict:
 def build_reasoning_context(
     input_data: dict,
     context: dict,
-    memory_data: Optional[dict] = None
+    memory_data: Optional[dict] = None,
+    profile_data: Optional[dict] = None,
+    trends_data: Optional[dict] = None,
+    coaching_tips: Optional[List[dict]] = None
 ) -> Dict[str, Any]:
     """
     Main entry point: builds the full reasoning context.
 
     Args:
-        input_data:   Raw pipeline input (from loader / previous step output)
-        context:      Execution context (user_id, session_id, domain, trace_id, etc.)
-        memory_data:  Output from memory_retrieval step (optional, may be None if FALLBACK)
+        input_data:     Raw pipeline input (from loader / previous step output)
+        context:        Execution context (user_id, session_id, domain, trace_id, etc.)
+        memory_data:    Output from memory_retrieval step (optional, may be None if FALLBACK)
+        profile_data:   Player profile summary dict (Phase 8, optional)
+        trends_data:    Behavioral trends dict (Phase 8, optional)
+        coaching_tips:  List of coaching messages (Phase 8, optional)
 
     Returns:
         Structured dict ready for prompt injection:
@@ -151,6 +163,9 @@ def build_reasoning_context(
             "memory": [ { tactical_pattern, cluster_id, ... }, ... ],
             "patterns": { dominant_pattern, pattern_distribution, avg_confidence },
             "cluster": { ... },
+            "player_identity": { ... },     # Phase 8
+            "trends": { ... },               # Phase 8
+            "coaching": [ ... ],             # Phase 8
             "meta": { domain, trace_id }
         }
     """
@@ -165,6 +180,18 @@ def build_reasoning_context(
     memory_results = []
     if memory_data and isinstance(memory_data, dict):
         memory_results = memory_data.get("memory", [])
+
+    # 2b. Apply memory weighting if profile available (Phase 8)
+    cluster_dist = None
+    if profile_data and isinstance(profile_data, dict):
+        cluster_dist = profile_data.get("cluster_distribution")
+
+    if memory_results and cluster_dist:
+        try:
+            from app.services.memory_weighting import rank_memories
+            memory_results = rank_memories(memory_results, cluster_dist)
+        except Exception as e:
+            logger.warning(f"[Trace:{trace_id}] Memory weighting failed, using raw: {str(e)}")
 
     memory_summary = _summarize_memory(memory_results)
 
@@ -181,11 +208,23 @@ def build_reasoning_context(
             "has_fallback": memory_data.get("fallback", False)
         }
 
+    # 5. Player identity (Phase 8)
+    player_identity = _build_player_identity(profile_data)
+
+    # 6. Trends (Phase 8)
+    trends_block = _build_trends_block(trends_data)
+
+    # 7. Coaching context (Phase 8)
+    coaching_block = _build_coaching_block(coaching_tips)
+
     reasoning_context = {
         "current_state": current_state,
         "memory": memory_summary,
         "patterns": patterns,
         "cluster": cluster_info,
+        "player_identity": player_identity,
+        "trends": trends_block,
+        "coaching": coaching_block,
         "meta": {
             "domain": context.get("domain", "unknown"),
             "trace_id": trace_id
@@ -195,7 +234,66 @@ def build_reasoning_context(
     logger.info(
         f"[Trace:{trace_id}] Context built | "
         f"Memories: {len(memory_summary)} | "
-        f"Dominant: {patterns.get('dominant_pattern', 'N/A')}"
+        f"Dominant: {patterns.get('dominant_pattern', 'N/A')} | "
+        f"Profile: {'loaded' if player_identity else 'none'} | "
+        f"Trends: {'loaded' if trends_block else 'none'}"
     )
 
     return reasoning_context
+
+
+def _build_player_identity(profile_data: Optional[dict]) -> Optional[dict]:
+    """
+    Builds the player identity block for LLM context injection.
+    Returns None if no profile available.
+    """
+    if not profile_data or not isinstance(profile_data, dict):
+        return None
+
+    return {
+        "preferred_style": profile_data.get("preferred_style", "unknown"),
+        "aggression_score": round(float(profile_data.get("aggression_score", 0.5)), 3),
+        "adaptability_score": round(float(profile_data.get("adaptability_score", 0.5)), 3),
+        "strengths": profile_data.get("strengths", [])[:5],
+        "weaknesses": profile_data.get("weaknesses", [])[:5],
+        "total_simulations": int(profile_data.get("total_simulations", 0))
+    }
+
+
+def _build_trends_block(trends_data: Optional[dict]) -> Optional[dict]:
+    """
+    Builds the trends block for LLM context injection.
+    Returns None if no trend data available.
+    """
+    if not trends_data or not isinstance(trends_data, dict):
+        return None
+
+    if trends_data.get("data_quality") == "insufficient":
+        return None
+
+    return {
+        "aggression_trend": trends_data.get("aggression_trend", 0.0),
+        "survival_trend": trends_data.get("survival_trend", 0.0),
+        "tactical_diversity": trends_data.get("tactical_diversity", 0.0),
+        "adaptability_trend": trends_data.get("adaptability_trend", 0.0),
+        "reaction_stability": trends_data.get("reaction_stability", 0.5)
+    }
+
+
+def _build_coaching_block(coaching_tips: Optional[List[dict]]) -> Optional[List[str]]:
+    """
+    Builds the coaching block for LLM context injection.
+    Returns None if no coaching data available.
+    Bounds to 3 tips maximum to control token budget.
+    """
+    if not coaching_tips or not isinstance(coaching_tips, list):
+        return None
+
+    tips = []
+    for tip in coaching_tips[:3]:
+        if isinstance(tip, dict) and tip.get("message"):
+            tips.append(tip["message"])
+        elif isinstance(tip, str):
+            tips.append(tip)
+
+    return tips if tips else None

@@ -1,16 +1,18 @@
 """
-Simulation Step — Phase 7: Digital Twin Reasoning Layer
+Simulation Step — Phase 8: Persistent Digital Twin
 
 This is the core simulation pipeline step that:
-1. Builds structured reasoning context (Context Builder)
-2. Generates mode-aware prompts (Prompt System)
-3. Calls the LLM with retry logic (LLM Integration)
-4. Parses and validates the output (Output Parser + Validator)
-5. Applies confidence calibration (Confidence Control)
-6. Returns a deterministic, bounded response
+1. Loads player profile (Phase 8 — Digital Twin Identity)
+2. Builds structured reasoning context (Context Builder)
+3. Generates mode-aware, identity-aware prompts (Prompt System)
+4. Calls the LLM with retry logic (LLM Integration)
+5. Parses and validates the output (Output Parser + Validator)
+6. Applies confidence calibration (Confidence Control)
+7. Triggers profile update (Phase 8 — Profile Evolution)
+8. Returns a deterministic, bounded response
 
 Execution Modes:
-- FULL:     ML + Memory + LLM — max confidence 0.95
+- FULL:     ML + Memory + LLM + Profile — max confidence 0.95
 - PARTIAL:  Degraded memory / LLM conservative — max confidence 0.70
 - FALLBACK: No LLM, static safe response — fixed confidence 0.50
 
@@ -18,6 +20,7 @@ RULES:
 - NEVER crashes — always returns a valid response.
 - ALWAYS returns a tuple: (response_dict, execution_mode).
 - Confidence is ALWAYS bounded by mode.
+- Profile loading failures do NOT crash the pipeline.
 """
 
 import logging
@@ -131,14 +134,33 @@ def run(input_data: dict, context: dict, execution_mode: str) -> tuple:
 
     try:
         # ==============================
-        # STEP 1: BUILD REASONING CONTEXT
+        # STEP 1: LOAD PLAYER PROFILE (Phase 8)
+        # ==============================
+        profile_data = None
+        trends_data = None
+        coaching_tips = None
+
+        try:
+            profile_data, trends_data, coaching_tips = _load_phase8_context(
+                context, input_data
+            )
+            if profile_data:
+                logger.info(f"[Trace:{trace_id}] PROFILE LOADED | Style: {profile_data.get('preferred_style', 'N/A')}")
+        except Exception as e:
+            logger.warning(f"[Trace:{trace_id}] Phase 8 context load failed (non-fatal): {str(e)}")
+
+        # ==============================
+        # STEP 2: BUILD REASONING CONTEXT
         # ==============================
         memory_data = _extract_memory_data(input_data)
 
         reasoning_context = build_reasoning_context(
             input_data=input_data,
             context=context,
-            memory_data=memory_data
+            memory_data=memory_data,
+            profile_data=profile_data,
+            trends_data=trends_data,
+            coaching_tips=coaching_tips
         )
 
         logger.info(f"[Trace:{trace_id}] CONTEXT BUILT")
@@ -237,3 +259,73 @@ def _extract_memory_data(input_data: dict) -> dict:
             return raw
 
     return {"memory": [], "fallback": True}
+
+
+# ==============================
+# PHASE 8 — PROFILE LOADING
+# ==============================
+def _load_phase8_context(context: dict, input_data: dict) -> tuple:
+    """
+    Loads Phase 8 profile-aware context:
+    1. Player profile from MongoDB
+    2. Behavioral trends from snapshots
+    3. Coaching tips from profile + trends
+
+    Returns:
+        Tuple of (profile_data, trends_data, coaching_tips)
+        All may be None if loading fails (non-fatal).
+    """
+    from app.database.mongo_client import db
+    from app.models.profile_schema import profile_from_mongo
+    from app.services.trend_engine import compute_trends
+    from app.services.coaching_engine import generate_coaching
+
+    user_id = context.get("user_id")
+    domain = context.get("domain", "blackops")
+
+    if not user_id:
+        return None, None, None
+
+    # 1. Load profile
+    profile_doc = db.playerprofiles.find_one(
+        {"user_id": user_id, "domain": domain}
+    )
+
+    profile_summary = profile_from_mongo(profile_doc)
+    profile_data = profile_summary.model_dump() if profile_summary else None
+
+    # 2. Load trends from snapshots
+    trends_data = None
+    try:
+        snapshots = list(
+            db.behaviorsnapshots.find(
+                {"user_id": user_id, "domain": domain}
+            ).sort("created_at", 1).limit(50)
+        )
+
+        if snapshots and len(snapshots) >= 3:
+            snapshot_dicts = []
+            for s in snapshots:
+                snap = dict(s)
+                # Convert Mongoose Map to dict if needed
+                cd = snap.get("cluster_distribution", {})
+                if hasattr(cd, "items"):
+                    snap["cluster_distribution"] = dict(cd)
+                snapshot_dicts.append(snap)
+
+            trends_data = compute_trends(snapshot_dicts)
+    except Exception as te:
+        logger.warning(f"[Phase8] Trend loading failed: {str(te)}")
+
+    # 3. Generate coaching tips
+    coaching_tips = None
+    try:
+        if profile_data:
+            coaching_tips = generate_coaching(
+                profile=profile_data,
+                trends=trends_data
+            )
+    except Exception as ce:
+        logger.warning(f"[Phase8] Coaching generation failed: {str(ce)}")
+
+    return profile_data, trends_data, coaching_tips

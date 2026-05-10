@@ -1,13 +1,20 @@
 """
-Prompt Templates — Phase 7: Digital Twin Reasoning Layer
+Prompt Templates — Phase 8: Persistent Digital Twin
 
-Provides deterministic, mode-aware prompt generation for the simulation LLM.
+Provides deterministic, mode-aware, identity-aware prompt generation.
+
+Phase 8 Additions:
+- Player identity section in system prompt
+- Behavioral trends injection
+- Personalized coaching context
+- Enhanced context formatting with profile data
 
 RULES:
 - All prompts enforce STRICT JSON output.
 - No free-form conversational responses.
 - Mode-specific behavior constraints.
 - Context is injected as structured data, NOT raw dicts.
+- Identity data grounds the reasoning in THIS player's history.
 """
 
 import json
@@ -137,6 +144,39 @@ def _format_context_block(reasoning_context: dict) -> str:
         sections.append("\n=== CLUSTER METADATA ===")
         sections.append(f"Raw Matches: {cluster.get('raw_matches', 0)}")
         sections.append(f"Quality Matches: {cluster.get('quality_matches', 0)}")
+
+    # --- Player Identity (Phase 8) ---
+    player_identity = reasoning_context.get("player_identity")
+    if player_identity:
+        sections.append("\n=== PLAYER IDENTITY (Digital Twin) ===")
+        sections.append(f"Preferred Style: {player_identity.get('preferred_style', 'unknown')}")
+        sections.append(f"Aggression Score: {player_identity.get('aggression_score', 0.5)}")
+        sections.append(f"Adaptability Score: {player_identity.get('adaptability_score', 0.5)}")
+        sections.append(f"Total Simulations: {player_identity.get('total_simulations', 0)}")
+
+        strengths = player_identity.get('strengths', [])
+        if strengths:
+            sections.append(f"Known Strengths: {', '.join(strengths)}")
+
+        weaknesses = player_identity.get('weaknesses', [])
+        if weaknesses:
+            sections.append(f"Known Weaknesses: {', '.join(weaknesses)}")
+
+    # --- Behavioral Trends (Phase 8) ---
+    trends = reasoning_context.get("trends")
+    if trends:
+        sections.append("\n=== BEHAVIORAL TRENDS ===")
+        sections.append(f"Aggression Trend: {trends.get('aggression_trend', 0.0):+.3f}")
+        sections.append(f"Survival Trend: {trends.get('survival_trend', 0.0):+.3f}")
+        sections.append(f"Tactical Diversity: {trends.get('tactical_diversity', 0.0):.3f}")
+        sections.append(f"Reaction Stability: {trends.get('reaction_stability', 0.5):.3f}")
+
+    # --- Coaching Context (Phase 8) ---
+    coaching = reasoning_context.get("coaching")
+    if coaching and isinstance(coaching, list):
+        sections.append("\n=== COACHING PRIORITIES ===")
+        for i, tip in enumerate(coaching[:3], 1):
+            sections.append(f"{i}. {tip}")
 
     return "\n".join(sections)
 
