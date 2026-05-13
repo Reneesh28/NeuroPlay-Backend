@@ -59,6 +59,18 @@ Every simulation job is processed through a sequential, stateful pipeline. Each 
 | 3 | `embedding_generation` | Converting features into 8-dimensional dense vectors (AutoEncoder) |
 | 4 | `clustering` | Grouping behavioral patterns via HDBSCAN clustering |
 | 5 | `simulation` | FAISS similarity search against historical vectors for outcome prediction |
+| 🔥 | `neural_universe` | **Additive Service:** Dimensionality reduction (UMAP) and spatial mapping for 3D visualization |
+
+---
+
+## 🧠 Neural Memory Universe
+The system now features an isolated **Neural Memory Universe** service that projects high-dimensional FAISS embeddings into a 3D coordinate space for interactive visualization.
+
+*   **Dimensionality Reduction**: Utilizes UMAP for cinematic, cluster-aware projection.
+*   **Domain Separation**: Discrete spatial regions for Black Ops and Modern Warfare domains.
+*   **Live Retrieval**: Real-time tracking of memory hits during simulation execution.
+
+---
 
 > **Note on V2 Models:** The AI Engine is currently running V2 models capable of dynamically categorizing standard gameplay, high-action combat (high motion/flashes), and non-gameplay states (menus/loading screens) purely through unsupervised clustering. See the [AI Engine README](./ai-engine/README.md) for more details.
 

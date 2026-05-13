@@ -80,6 +80,7 @@ node worker.js
 | `POST` | `/api/job` | Creates a new pipeline job and enqueues it. |
 | `GET`  | `/api/job/:id` | Polls the real-time status and output of a job. |
 | `POST` | `/api/upload` | Uploads a file (using Multer) to be processed. |
+| `GET`  | `/api/neural-universe/map` | Proxies to AI Engine to retrieve the 3D spatial intelligence map. |
 
 ---
 

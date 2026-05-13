@@ -155,6 +155,7 @@ class InferenceEngine:
 
             results.append({
                 "segment_id": segment_ids[i],
+                "faiss_index": int(idx),
                 "cluster_id": int(self.clusters["labels"][idx]),
                 "confidence": float(self.clusters["confidence"][idx]),
                 "distance": float(distances[i]),

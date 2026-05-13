@@ -13,8 +13,16 @@ The AI Engine processes gameplay data through a stateful 5-step pipeline:
 3. **Embedding Generation (`embedding_generation`)**: Uses a PyTorch **AutoEncoder** to compress 20-dimensional feature vectors down to 8-dimensional dense embeddings.
 4. **Clustering (`clustering`)**: Uses **HDBSCAN** (unsupervised learning) to group similar embeddings into distinct behavioral clusters (e.g., standard gameplay, firefights, menus).
 5. **Simulation (`simulation`)**: Uses **FAISS** (Facebook AI Similarity Search) to perform ultra-fast nearest-neighbor lookups, matching new gameplay segments against the indexed historical clusters to simulate outcomes.
+6. **Neural Universe Mapping (`neural_universe`)**: An additive service that uses **UMAP** to project high-dimensional FAISS embeddings into 3D space for cinematic visualization.
 
 ---
+
+## 🌌 Neural Memory Universe Service
+The AI Engine now provides a dedicated `neural_universe` service layer:
+- **`dimensionality_reduction.py`**: Handles UMAP projection of dense vectors.
+- **`spatial_mapper.py`**: Orchestrates global coordinate mapping and domain separation.
+- **`cluster_projection.py`**: Projects KMeans clusters into the 3D space for tactical grouping.
+- **`similarity_links.py`**: Calculates Cosine Similarity between neighbors to generate visible neural links.
 
 ## 📊 V2 Machine Learning Models
 

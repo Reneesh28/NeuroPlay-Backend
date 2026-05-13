@@ -4,6 +4,7 @@ from app.schemas.response_schema import ExecuteResponse
 from app.core.executor import execute_pipeline_step
 
 from app.api.search import router as search_router
+from app.api.neural_universe import router as universe_router
 
 router = APIRouter()
 
@@ -37,3 +38,4 @@ async def memory_retrieval(req: ExecuteRequest):
 # SEARCH ROUTES
 # ==============================
 router.include_router(search_router, prefix="/api")
+router.include_router(universe_router, prefix="/neural-universe")

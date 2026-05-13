@@ -56,7 +56,8 @@ def run(input_data: Dict[str, Any], context: Dict[str, Any], execution_mode: str
             "embedding": embedding,
             "metadata": {
                 "raw_count": len(raw_results),
-                "filtered_count": len(valid_memory)
+                "filtered_count": len(valid_memory),
+                "hit_indices": [int(r.get("faiss_index", 0)) for r in raw_results if "faiss_index" in r]
             }
         }, mode
 
