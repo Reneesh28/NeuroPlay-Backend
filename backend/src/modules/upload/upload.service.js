@@ -69,7 +69,7 @@ async function uploadChunk(uploadId, chunkIndex, buffer) {
     return { received: data.receivedChunks.length };
 }
 
-async function completeUpload(uploadId, userId, game_id) {
+async function completeUpload(uploadId, userId, game_id, traceId) {
     const key = `${UPLOAD_PREFIX}${uploadId}`;
     const raw = await redis.get(key);
 
@@ -114,6 +114,7 @@ async function completeUpload(uploadId, userId, game_id) {
         user_id: userId,
         game_id,
         domain,
+        trace_id: traceId
     });
 
     // 🔥 STEP 5: CREATE JOB
@@ -123,7 +124,7 @@ async function completeUpload(uploadId, userId, game_id) {
     });
 
     // 🔥 STEP 6: ENQUEUE JOB
-    await producer.enqueueJobStep(job, job.current_step);
+    await producer.enqueueJobStep(job, job.current_step, normalizedInput);
 
 
     // 🔥 STEP 8: CLEANUP

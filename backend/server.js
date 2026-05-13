@@ -2,12 +2,15 @@ require("dotenv").config();
 const app = require("./src/app");
 const connectDB = require("./src/config/db");
 require("./src/config/redis");
-const env = require("./src/config/env");
+const validateEnv = require("./src/config/env");
+
+// 🔥 Validate Environment
+const env = validateEnv();
 
 // 🔥 STEP 4.5 — IMPORT RECOVERY SCHEDULER
 const { startRecoveryScheduler } = require("./src/core/recovery/recovery.scheduler");
 
-const PORT = env.port || 5000;
+const PORT = env.PORT || 5000;
 
 // Connect DB
 connectDB();

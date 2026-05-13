@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 
 def build_success_response(
     output_ref: str,
+    output: Optional[Dict[str, Any]],
     next_step: Optional[str],
     execution_mode: str,
     resolved_model_version: Optional[str],
@@ -22,6 +23,7 @@ def build_success_response(
     return ExecuteResponse(
         status="success",
         output_ref=output_ref,
+        output=output,
         next_step=next_step,
         execution_mode=execution_mode,
         resolved_model_version=resolved_model_version,
@@ -61,7 +63,7 @@ def build_response(data: dict, mode):
     return {
         "predicted_action": str(data.get("predicted_action", "hold position")).lower(),
         "confidence": float(max(0.0, min(data.get("confidence", 0.5), 1.0))),
-        "reasoning": str(data.get("reasoning", ""))[:300],
-        "coaching_tip": str(data.get("coaching_tip", ""))[:200],
+        "reasoning": str(data.get("reasoning", "")),
+        "coaching_tip": str(data.get("coaching_tip", "")),
         "execution_mode": mode  # ✅ fixed
     }

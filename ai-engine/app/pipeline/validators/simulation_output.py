@@ -15,8 +15,8 @@ from typing import Dict, Any
 # ==============================
 # SCHEMA CONSTRAINTS
 # ==============================
-MAX_REASONING_LENGTH = 500
-MAX_COACHING_LENGTH = 200
+MAX_REASONING_LENGTH = 2000
+MAX_COACHING_LENGTH = 500
 CONFIDENCE_MIN = 0.0
 CONFIDENCE_MAX = 1.0
 

@@ -32,7 +32,8 @@ async function init(req, res, next) {
 
 async function uploadChunk(req, res, next) {
     try {
-        const { uploadId, chunkIndex, game_id } = req.validatedBody;
+        const { game_id, payload } = req.validatedBody;
+        const { uploadId, chunkIndex } = payload || {};
 
         // 🔥 Resolve and validate domain
         const domain = resolveDomain(game_id);
@@ -64,7 +65,7 @@ async function complete(req, res, next) {
         const domain = resolveDomain(game_id);
         assertValidDomain(domain);
 
-        const result = await uploadService.completeUpload(uploadId, user_id, game_id);
+        const result = await uploadService.completeUpload(uploadId, user_id, game_id, req.traceId);
 
         return res.json(
             successResponse(result, {

@@ -74,9 +74,9 @@ const executeJobStep = async (payload) => {
             throw new Error("Missing output in processor response");
         }
 
-        // 🔥 SAFE OUTPUT (STRING ONLY)
+        // 🔥 FIX: allow objects (rich metadata) or strings
         const output_ref =
-            typeof result.output === "string"
+            (typeof result.output === "string" || typeof result.output === "object")
                 ? result.output
                 : null;
 
@@ -98,7 +98,7 @@ const executeJobStep = async (payload) => {
         // 💾 UPDATE STATE
         // ==============================
         const updatedJob = await updateStepStatus(job._id, step, {
-            status: "completed",
+            status: result.status || "completed", // 🔥 FIX: respect processor status
             output_ref,
             next_step,
             execution_mode

@@ -19,17 +19,17 @@ const STEP_ENDPOINT_MAP = {
 // ==============================
 function normalizeContext(context = {}) {
     return {
-        ...context,
+        user_id: context.user_id,
+        session_id: context.session_id || null,
+        domain: context.domain,
+        game_id: context.game_id,
+        trace_id: context.trace_id,
 
-        // 🔥 Ensure required fields exist
-        feature_version:
-            context.feature_version || context?.versions?.feature || "v1",
-
-        pipeline_version:
-            context.pipeline_version || context?.versions?.pipeline || "v1",
-
-        resolved_model_version:
-            context.resolved_model_version || context?.versions?.model || "v1"
+        // Versions
+        requested_model_version: context.requested_model_version || null,
+        resolved_model_version: context.resolved_model_version || context?.versions?.model || "v1",
+        feature_version: context.feature_version || context?.versions?.feature || "v1",
+        pipeline_version: context.pipeline_version || context?.versions?.pipeline || "v1"
     };
 }
 
@@ -59,7 +59,9 @@ function normalizeAIResponse(response) {
 
     return {
         status: "completed",
-        output: response.output_ref,
+        // 🔥 CRITICAL: prefer output_ref (the string ref_) to keep pipeline efficient
+        // Fallback to direct output if ref is missing
+        output: response.output_ref || response.output,
         next_step: response.next_step || null,
         execution_mode: response.execution_mode,
         model_version: response.resolved_model_version || null
@@ -88,7 +90,7 @@ async function execute(payload) {
         throw new Error("AI_SERVICE_URL not configured");
     }
 
-    const { job_id, step } = payload;
+    const { job_id, step, input_ref, input_type } = payload;
 
     // 🔥 FIX: normalize context BEFORE sending
     const context = normalizeContext(payload.context);
@@ -103,13 +105,24 @@ async function execute(payload) {
         const response = await aiCircuitBreaker.fire(
             () => axios.post(
                 `${AI_BASE_URL}${endpoint}`,
-                { ...payload, context },
-                { timeout: 15000 } // 🔥 Reduced from 30s to 15s for faster failover
+                {
+                    job_id,
+                    step,
+                    input_ref,
+                    input_type: input_type || "reference",
+                    context
+                },
+                {
+                    timeout: 30000, // Increase to 30s for video processing
+                    headers: {
+                        'x-trace-id': context?.trace_id || "unknown"
+                    }
+                }
             ),
             () => { throw new Error("CIRCUIT_BREAKER_OPEN"); }
         );
 
-        console.log("🔥 AI RAW RESPONSE:", response.data); // debug
+        console.log("🔥 AI RAW RESPONSE:", response.data);
 
         return normalizeAIResponse(response.data);
 
@@ -118,15 +131,17 @@ async function execute(payload) {
             step,
             endpoint,
             message: error.message,
-            response: error.response?.data
+            detail: error.response?.data?.detail // 🔥 Log the Pydantic validation detail
         });
 
+        // Fail-safe: Return failed status
         return {
-            status: "completed",
+            status: "failed", // Mark as failed instead of completing with fallback for better visibility
             output: null,
             next_step: null,
             execution_mode: "FALLBACK",
-            model_version: null
+            model_version: null,
+            error: error.response?.data || error.message
         };
     }
 }

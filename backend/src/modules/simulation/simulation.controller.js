@@ -2,16 +2,23 @@ const jobService = require("../../core/jobs/job.service");
 const producer = require("../../core/queue/producer");
 const { buildContext } = require("../../core/jobs/context.builder");
 const Job = require("../../core/jobs/job.model");
+const { successResponse } = require("../../contracts/api.contract");
+const { resolveDomain } = require("../../core/domain/domain.resolver");
 
 exports.runSimulation = async (req, res, next) => {
     try {
-        const { scenario, domain } = req.body;
+        const { user_id, game_id, domain: requestedDomain, payload } = req.validatedBody;
+        const { scenario } = payload || {};
+
+        // Resolve domain if not explicitly provided
+        const domain = requestedDomain || resolveDomain(game_id);
 
         const context = buildContext({
-            user_id: req.user?.id || "demo-user",
-            session_id: "demo-session",
-            game_id: "demo-game",
-            domain: domain || "blackops"
+            user_id,
+            session_id: req.validatedBody.session_id || "demo-session",
+            game_id,
+            domain,
+            trace_id: req.traceId
         });
 
         const job = await jobService.createJob({
@@ -19,19 +26,16 @@ exports.runSimulation = async (req, res, next) => {
             input_ref: { scenario }
         });
 
-        // Artificially skip to simulation if needed, or let the pipeline handle it.
-        // For Phase 8 we'll assume the pipeline handles text inputs in simulation if they pass through,
-        // or we manually set it to simulation for quick testing.
-        
         // Push to queue
-        await producer.enqueueJobStep(job, job.current_step);
+        await producer.enqueueJobStep(job, job.current_step, { scenario });
 
-        res.json({
-            success: true,
-            data: {
-                job_id: job._id
-            }
-        });
+        return res.json(
+            successResponse({
+                job_id: job.job_id
+            }, {
+                trace_id: req.headers['x-trace-id']
+            })
+        );
     } catch (err) {
         next(err);
     }

@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 def _validate_context(context: ExecutionContext):
     required_fields = [
         "user_id",
-        "session_id",
         "domain",
         "game_id",
         "trace_id",
@@ -83,6 +82,7 @@ def execute_pipeline_step(req: ExecuteRequest) -> ExecuteResponse:
         # 6. Success response
         return build_success_response(
             output_ref=output_ref,
+            output=result_data,
             next_step=step_config.next_step,
             execution_mode=execution_mode,
             resolved_model_version=req.context.resolved_model_version,

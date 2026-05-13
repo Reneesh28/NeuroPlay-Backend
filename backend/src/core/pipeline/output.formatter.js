@@ -1,16 +1,14 @@
 const { classifyError } = require("../resilience/error.classifier");
 
 function formatStepOutput({ step, rawOutput, executionTime }) {
-    // 🔥 HARD SAFETY: force string
+    // 🔥 FIX: allow objects or strings (rich metadata support)
     const safeOutput =
-        typeof rawOutput?.output === "string"
+        (typeof rawOutput?.output === "string" || typeof rawOutput?.output === "object")
             ? rawOutput.output
             : null;
 
     return {
         status: "completed",
-
-        // 🔥 GUARANTEED STRING ONLY
         output: safeOutput,
 
         next_step: rawOutput?.next_step ?? null,

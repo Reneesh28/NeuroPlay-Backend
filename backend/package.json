@@ -7,7 +7,6 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "worker": "node src/core/workers/worker.js"
-
   },
   "keywords": [],
   "author": "",
@@ -15,14 +14,18 @@
   "type": "commonjs",
   "dependencies": {
     "axios": "^1.15.0",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^5.73.5",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.5.1",
     "fs-extra": "^11.3.4",
     "ioredis": "^5.10.1",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.4.1",
     "multer": "^2.1.1",
+    "rate-limit-redis": "^5.0.0",
     "redis": "^5.12.0",
     "uuid": "^13.0.0",
     "zod": "^4.3.6"

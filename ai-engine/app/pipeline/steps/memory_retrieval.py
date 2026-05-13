@@ -21,6 +21,8 @@ def rank_and_filter(results):
 
 
 
+_engine_cache = {}
+
 def run(input_data: Dict[str, Any], context: Dict[str, Any], execution_mode: str):
     trace_id = context.get("trace_id", "unknown")
     domain = context.get("domain") or "blackops"
@@ -28,14 +30,16 @@ def run(input_data: Dict[str, Any], context: Dict[str, Any], execution_mode: str
     try:
         logger.info(f"[Trace: {trace_id}] Memory retrieval FULL | Domain: {domain}")
 
+        if domain not in _engine_cache:
+            _engine_cache[domain] = InferenceEngine(domain)
+        
+        engine = _engine_cache[domain]
+
         raw_data = input_data.get("input_data") or input_data.get("data") or input_data
         embedding = raw_data.get("embedding")
 
         if not embedding:
             raise ValueError("Missing embedding")
-
-        # 🔥 Initialize engine
-        engine = InferenceEngine(domain)
 
         raw_results = engine.search_by_embedding(embedding)
 

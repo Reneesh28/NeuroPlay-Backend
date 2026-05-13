@@ -65,9 +65,11 @@ You have access to complete game state and historical memory.
 You MUST:
 - Think strategically about positioning, timing, and risk
 - Consider enemy behavior patterns from historical data
-- Provide detailed reasoning (3-5 sentences)
+- Provide EXTREMELY DETAILED, exhaustive reasoning (8-12 sentences) covering tactical logic
+- Reference multiple historical memories if applicable
 - Recommend optimal actions, including calculated risks
 - Reference historical patterns when relevant
+- Provide a comprehensive, actionable coaching tip (2-3 sentences)
 - Set confidence between 0.5 and 0.95 based on data quality
 """,
 
@@ -79,10 +81,11 @@ Some data may be missing or unreliable. Memory retrieval was limited.
 You MUST:
 - Prefer SAFE, defensive decisions
 - Avoid aggressive or risky actions
-- Keep reasoning concise (1-3 sentences)
+- Provide moderately detailed reasoning (3-5 sentences)
 - Focus on survival and positioning
 - Set confidence between 0.3 and 0.7
 - Do NOT reference historical data if none is provided
+- Provide a helpful coaching tip (1-2 sentences)
 """,
 
     ExecutionMode.FALLBACK: """

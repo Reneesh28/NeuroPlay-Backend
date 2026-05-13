@@ -11,7 +11,11 @@ const GAME_DOMAIN_MAP = {
     bo4: "blackops",
     bo6: "blackops",
     bo7: "blackops",
-    coldwar: "blackops"
+    coldwar: "blackops",
+
+    // 🎮 Warzone
+    wz: "warzone",
+    warzone: "warzone"
 };
 
 module.exports = {

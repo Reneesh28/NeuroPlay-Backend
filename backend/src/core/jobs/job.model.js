@@ -10,8 +10,9 @@ const StepSchema = new mongoose.Schema(
             default: "pending"
         },
 
-        input_ref: { type: String },
-        output_ref: { type: String },
+        // Changed to Object to support rich metadata references
+        input_ref: { type: mongoose.Schema.Types.Mixed },
+        output_ref: { type: mongoose.Schema.Types.Mixed },
 
         execution_mode: {
             type: String,
@@ -58,8 +59,9 @@ const JobSchema = new mongoose.Schema(
 
         steps: [StepSchema],
 
-        input_ref: { type: String },
-        output_ref: { type: String },
+        // Changed to Object to support rich metadata references
+        input_ref: { type: mongoose.Schema.Types.Mixed },
+        output_ref: { type: mongoose.Schema.Types.Mixed },
 
         execution_mode: {
             type: String,

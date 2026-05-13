@@ -18,3 +18,5 @@ def startup_event():
 
 # 🔥 SINGLE PREFIX POINT
 app.include_router(router, prefix="/ai")
+
+# 🔥 RELOAD TRIGGER: 2026-05-11 23:35:00

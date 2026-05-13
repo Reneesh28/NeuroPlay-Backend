@@ -9,7 +9,14 @@ const QUEUE_NAMES = [
     "simulation-queue"
 ];
 
-const CONCURRENCY = 5;
+const CONCURRENCY_MAP = {
+    "ingestion-queue": 10,
+    "processing-queue": 5,
+    "embedding-queue": 5,
+    "simulation-queue": 2 // 🔥 Expensive AI inference
+};
+
+const DEFAULT_CONCURRENCY = 3;
 
 console.log("👷 Starting NeuroPlay Worker Cluster...");
 
@@ -26,7 +33,7 @@ const workers = QUEUE_NAMES.map(queueName => {
         },
         {
             connection,
-            concurrency: CONCURRENCY,
+            concurrency: CONCURRENCY_MAP[queueName] || DEFAULT_CONCURRENCY,
         }
     );
 

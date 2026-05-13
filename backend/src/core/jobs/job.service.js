@@ -13,6 +13,11 @@ async function createJob({ context, input_ref }) {
     return await Job.create(jobData);
 }
 
+// 🔥 Get job by ID
+async function getJob(jobId) {
+    return await Job.findById(jobId);
+}
+
 // 🔥 Update job status
 async function updateJobStatus(jobId, nextStatus) {
     const job = await Job.findById(jobId);

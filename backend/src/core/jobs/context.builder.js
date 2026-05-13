@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require("uuid");
 
 // 🔥 Build execution context (IMMUTABLE)
-const buildContext = ({ user_id, session_id, game_id, domain }) => {
+const buildContext = ({ user_id, session_id, game_id, domain, trace_id }) => {
     return {
         user_id,
         session_id: session_id || null,
@@ -17,7 +17,7 @@ const buildContext = ({ user_id, session_id, game_id, domain }) => {
         },
 
         // 🔥 tracing
-        trace_id: uuidv4()
+        trace_id: trace_id || uuidv4()
     };
 };
 
