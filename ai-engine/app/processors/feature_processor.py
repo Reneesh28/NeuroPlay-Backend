@@ -43,7 +43,6 @@ def _fix_vector(vector):
 
 def run(input_data: dict, context: dict, execution_mode: str) -> tuple:
     trace_id = context.get("trace_id", "unknown")
-
     current_mode = execution_mode
 
     # ======================
@@ -51,40 +50,59 @@ def run(input_data: dict, context: dict, execution_mode: str) -> tuple:
     # ======================
     if current_mode == ExecutionMode.FULL:
         try:
-            logger.info(f"[Trace: {trace_id}] Feature FULL")
+            logger.info(f"[Trace: {trace_id}] Feature Extraction START (Mode: FULL)")
 
             result = run_feature_extraction(input_data)
 
             if not isinstance(result, dict):
-                raise ValueError("Feature extraction must return dict")
+                raise MLError("Feature extraction result is not a dictionary")
 
+            raw_features = result.get("features", {})
+            norm_features = result.get("normalized_features", {})
             vector = result.get("ml_input")
+            status = result.get("feature_status", {})
+            missing = result.get("missing_features", [])
+
+            # --- STRUCTURED DEBUG LOGGING (STEP 8) ---
+            logger.info(f"[Trace: {trace_id}] DIAGNOSTICS:")
+            logger.info(f"  - MISSING SOURCES: {missing}")
+            logger.info(f"  - FEATURE STATUS: {status}")
+            logger.info(f"  - ML VECTOR (HEAD 5): {vector[:5] if vector else 'None'}")
+
+            # --- CRITICAL FEATURE VALIDATION (STEP 7) ---
+            critical_features = ["movement_speed", "accuracy", "damage_dealt"]
+            failed_critical = [f for f in critical_features if status.get(f) == "missing_source"]
+            
+            if failed_critical:
+                logger.warning(f"[Trace: {trace_id}] Missing critical telemetry: {failed_critical}")
+                raise PartialExecutionTrigger(f"Missing critical telemetry: {failed_critical}")
 
             if vector is None:
-                raise ValueError("ml_input missing from feature extraction")
+                raise MLError("ml_input missing from feature extraction")
 
             # 🔥 SAFE FIX (NO HARD FAIL)
             vector = _fix_vector(vector)
 
-            logger.info(f"[Trace: {trace_id}] Feature vector ready")
-
             output = {
-                "features": result.get("features", {}),
-                "normalized_features": result.get("normalized_features", {}),
-                "ml_input": vector
+                "features": raw_features,
+                "normalized_features": norm_features,
+                "ml_input": vector,
+                "diagnostics": {
+                    "status": status,
+                    "missing": missing
+                }
             }
-
-            print("PROCESSOR OUTPUT:", output)  # 🔥 DEBUG
 
             return output, ExecutionMode.FULL
 
-        except (MLError, PartialExecutionTrigger):
-            logger.warning(f"[Trace: {trace_id}] Switching to PARTIAL mode")
+        except (MLError, PartialExecutionTrigger) as e:
+            logger.warning(f"[Trace: {trace_id}] Degrading to PARTIAL: {str(e)}")
             current_mode = ExecutionMode.PARTIAL
 
         except Exception as e:
-            logger.error(f"[Trace: {trace_id}] Error in Feature FULL: {str(e)}")
+            logger.error(f"[Trace: {trace_id}] Unexpected error in FULL: {str(e)}")
             current_mode = ExecutionMode.PARTIAL
+
 
     # ======================
     # PARTIAL MODE

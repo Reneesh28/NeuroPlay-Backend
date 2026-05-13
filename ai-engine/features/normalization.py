@@ -1,3 +1,8 @@
+import logging
+import math
+
+logger = logging.getLogger(__name__)
+
 FEATURE_RANGES = {
     "movement_speed": (0, 10),
     "aim_stability": (0, 1),
@@ -28,15 +33,27 @@ def normalize_features(features):
     normalized = {}
 
     for key, value in features.items():
-        value = float(value) if value is not None else 0.0
+        try:
+            # 1. Type Enforcement
+            val = float(value) if value is not None else 0.0
+            
+            # 2. NaN / Infinity Protection
+            if math.isnan(val) or math.isinf(val):
+                logger.warning(f"Corrupted telemetry detected: {key}={val}. Resetting to 0.0")
+                val = 0.0
 
-        min_val, max_val = FEATURE_RANGES.get(key, (0, 1))
+            min_val, max_val = FEATURE_RANGES.get(key, (0, 1))
 
-        if max_val - min_val == 0:
-            norm = 0
-        else:
-            norm = (value - min_val) / (max_val - min_val)
+            if max_val - min_val == 0:
+                norm = 0.0
+            else:
+                norm = (val - min_val) / (max_val - min_val)
 
-        normalized[key] = max(0, min(1, norm))
+            # 3. Range Clamping
+            normalized[key] = max(0.0, min(1.0, norm))
 
-    return normalized
+        except (ValueError, TypeError) as e:
+            logger.error(f"Normalization failed for {key}: {str(e)}")
+            normalized[key] = 0.0
+
+    return normalized
