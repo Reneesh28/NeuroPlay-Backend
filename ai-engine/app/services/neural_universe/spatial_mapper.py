@@ -32,39 +32,63 @@ def map_universe_domain(domain: str) -> Dict[str, Any]:
         
     coords_3d = project_embeddings_3d(embeddings_subset)
     
-    # 3. Apply Domain Offset
+    # 3. Identify Clusters
+    cluster_ids = identify_clusters(coords_3d)
+    
+    # Calculate cluster centers
+    from .cluster_projection import get_cluster_centers
+    centers = get_cluster_centers(coords_3d, cluster_ids)
+    
+    # Count members in each cluster
+    counts = {}
+    for cid in cluster_ids:
+        counts[cid] = counts.get(cid, 0) + 1
+        
+    # 4. Apply Domain Offset and Scaling
     offset = get_domain_offset(domain)
-    nodes = []
-    for i, coord in enumerate(coords_3d):
-        orig_idx = int(indices[i])
-        nodes.append({
-            "id": f"{domain}_{orig_idx}",
+    scale = 8.0 # Expand projection
+    
+    cluster_nodes = []
+    for cid, center in centers.items():
+        cluster_nodes.append({
+            "id": f"{domain}_{cid}",
             "domain": domain,
-            "x": float(coord[0] + offset[0]),
-            "y": float(coord[1] + offset[1]),
-            "z": float(coord[2] + offset[2]),
-            "confidence": 0.9, # Placeholder for actual confidence
-            "memory_strength": 0.8 # Placeholder
+            "cluster_id": cid,
+            "x": float((center["x"] * scale) + offset[0]),
+            "y": float((center["y"] * scale) + offset[1]),
+            "z": float((center["z"] * scale) + offset[2]),
+            "confidence": 0.9,
+            "memory_strength": 0.8,
+            "count": counts[cid],
+            "isCluster": True
         })
         
-    # 4. Identify Clusters
-    cluster_ids = identify_clusters(coords_3d)
-    for i, node in enumerate(nodes):
-        node["cluster_id"] = int(cluster_ids[i])
+    # 5. Aggregate Links between Clusters
+    raw_links = generate_similarity_links(embeddings_subset)
+    cluster_links_map = {}
+    
+    for link in raw_links:
+        s_idx = link["source"]
+        t_idx = link["target"]
+        s_cid = cluster_ids[s_idx]
+        t_cid = cluster_ids[t_idx]
         
-    # 5. Generate Links
-    links = generate_similarity_links(embeddings_subset)
-    # Remap link indices to node IDs
+        if s_cid != t_cid:
+            key = tuple(sorted([s_cid, t_cid]))
+            if key not in cluster_links_map:
+                cluster_links_map[key] = 0
+            cluster_links_map[key] += link["value"]
+            
     formatted_links = []
-    for link in links:
+    for (s_cid, t_cid), value in cluster_links_map.items():
         formatted_links.append({
-            "source": nodes[link["source"]]["id"],
-            "target": nodes[link["target"]]["id"],
-            "value": link["value"]
+            "source": f"{domain}_{s_cid}",
+            "target": f"{domain}_{t_cid}",
+            "value": float(value)
         })
         
     return {
         "domain": domain,
-        "nodes": nodes,
+        "nodes": cluster_nodes,
         "links": formatted_links
     }

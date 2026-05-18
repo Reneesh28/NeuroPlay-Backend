@@ -22,6 +22,11 @@ def project_embeddings_3d(embeddings: np.ndarray, n_neighbors: int = 15, min_dis
         numpy array of shape (N, 3)
     """
     try:
+        cache_key = f"{embeddings.shape}_{np.sum(embeddings)}"
+        if cache_key in _projection_cache:
+            logger.info("Serving UMAP projection from cache.")
+            return _projection_cache[cache_key]
+
         logger.info(f"Running UMAP projection for {len(embeddings)} embeddings...")
         reducer = umap.UMAP(
             n_neighbors=n_neighbors,
@@ -31,6 +36,7 @@ def project_embeddings_3d(embeddings: np.ndarray, n_neighbors: int = 15, min_dis
             random_state=42
         )
         embedding_3d = reducer.fit_transform(embeddings)
+        _projection_cache[cache_key] = embedding_3d
         return embedding_3d
     except Exception as e:
         logger.error(f"UMAP projection failed: {str(e)}")
@@ -44,7 +50,7 @@ def get_domain_embeddings(domain: str) -> Optional[np.ndarray]:
     # Logic to find the path (mirroring services.ml.v2.faiss_index)
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "../../../"))
-    EMBED_DIR = os.path.join(ROOT_DIR, "embeddings", "v2")
+    EMBED_DIR = os.path.join(ROOT_DIR, "services", "embeddings", "v2")
     
     # Standardize domain name
     domain = domain.lower().replace(" ", "")
